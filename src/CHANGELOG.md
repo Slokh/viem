@@ -1,5 +1,11 @@
 # viem
 
+## 2.54.7
+
+### Patch Changes
+
+- [#4809](https://github.com/wevm/viem/pull/4809) [`c93d355d68f2ac98d5f139c963564651576793de`](https://github.com/wevm/viem/commit/c93d355d68f2ac98d5f139c963564651576793de) Thanks [@defiQUG](https://github.com/defiQUG)! - Added Defi Oracle Meta Mainnet chain.
+
 ## 2.54.6
 
 ### Patch Changes
