@@ -176,16 +176,16 @@ export declare namespace deployEarnStack {
 }
 
 /**
- * Deploys a capped Boost Earn vault whose engine holds shares of an existing
- * Base Earn vault.
+ * Deploys a capped outer Earn vault whose engine holds shares of an existing
+ * inner Earn vault.
  */
-export async function deployEarnCampaign(
+export async function deployNestedEarnVaults(
   client: Client<Transport, Chain, viem_Account>,
-  options: deployEarnCampaign.Options,
-): Promise<deployEarnCampaign.ReturnValue> {
+  options: deployNestedEarnVaults.Options,
+): Promise<deployNestedEarnVaults.ReturnValue> {
   const {
     admissionEndAt = 0n,
-    base,
+    inner,
     contributionsEndAt = 0n,
     deploymentId = Hex.random(32),
     globalAssetCap,
@@ -194,12 +194,12 @@ export async function deployEarnCampaign(
   const operator = client.account
   const engine = await deployContract(client, {
     abi: EarnContracts.earnVaultEngine.abi,
-    args: [base.adapter, operator.address, '', ''],
+    args: [inner.adapter, operator.address, '', ''],
     bytecode: EarnContracts.earnVaultEngine.bytecode,
   })
   const receipt = await writeContractSync(client, {
     abi: Abis.earnFactory,
-    address: base.factory,
+    address: inner.factory,
     args: [
       {
         controls: {
@@ -236,36 +236,36 @@ export async function deployEarnCampaign(
   })
 
   return {
-    baseVault: base.adapter,
-    boostShareToken: deployed.args.earnShare,
-    boostVault: deployed.args.earnVault,
+    innerVault: inner.adapter,
+    outerShareToken: deployed.args.earnShare,
+    outerVault: deployed.args.earnVault,
     engine,
   }
 }
 
-export declare namespace deployEarnCampaign {
+export declare namespace deployNestedEarnVaults {
   export type Options = {
-    /** Optional Boost principal-admission deadline. */
+    /** Optional outer principal-admission deadline. */
     admissionEndAt?: bigint | undefined
-    /** Existing Base Earn stack. */
-    base: deployEarnStack.ReturnValue
-    /** Optional Boost contribution-funding deadline. */
+    /** Existing inner Earn stack. */
+    inner: deployEarnStack.ReturnValue
+    /** Optional outer contribution-funding deadline. */
     contributionsEndAt?: bigint | undefined
     /** Share-token namespace id. @default random */
     deploymentId?: Hex.Hex | undefined
-    /** Cumulative campaign-wide principal cap. */
+    /** Cumulative outer-vault principal cap. */
     globalAssetCap: bigint
     /** Optional cumulative public-recipient principal cap. */
     receiverAssetCap?: bigint | undefined
   }
 
   export type ReturnValue = {
-    /** Persistent Base Earn vault. */
-    baseVault: Address
-    /** Boost Earn share token. */
-    boostShareToken: Address
-    /** Capped Boost Earn vault. */
-    boostVault: Address
+    /** Persistent inner Earn vault. */
+    innerVault: Address
+    /** Outer Earn share token. */
+    outerShareToken: Address
+    /** Capped outer Earn vault. */
+    outerVault: Address
     /** Ownerless nested Earn engine. */
     engine: Address
   }

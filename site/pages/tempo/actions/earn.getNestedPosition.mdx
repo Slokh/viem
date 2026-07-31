@@ -1,0 +1,48 @@
+import ReadParameters from '../../../snippets/tempo/read-parameters.mdx'
+
+# `earn.getNestedPosition`
+
+Gets one account's inner and outer nested Earn positions and aggregate asset value.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const position = await client.earn.getNestedPosition({
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerVault: '0x0000000000000000000000000000000000000002',
+})
+// @log: { inner: { ... }, outer: { ... }, totalValue: 105_000_000n, ... }
+```
+
+Do not add raw inner and outer share balances. Their exchange rates can differ.
+
+## Return Value
+
+```ts
+type ReturnValue = {
+  assetBalance: bigint
+  assetToken: Address
+  inner: getPosition.ReturnValue
+  outer: getPosition.ReturnValue
+  totalValue: bigint
+}
+```
+
+## Parameters
+
+### account (optional)
+
+- **Type:** `Account | Address`
+- **Default:** `client.account`
+
+### innerVault
+
+- **Type:** `Address`
+
+### outerVault
+
+- **Type:** `Address`
+
+<ReadParameters />

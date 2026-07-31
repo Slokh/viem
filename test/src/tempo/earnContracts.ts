@@ -1,5 +1,5 @@
 // Generated with `pnpm gen:tempo-earn-abis`. Do not modify manually.
-// Earn source: tempoxyz/earn at d8a625a06bbac3c9f2678d586aaf8138c310f882.
+// Earn source: tempoxyz/earn at 56bc902d4a2fa882ce52e2e38ef49c150531703a.
 
 export const simple4626Vault = {
   abi: [

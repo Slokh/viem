@@ -656,7 +656,7 @@ export namespace depositSync {
 }
 
 /**
- * Deposits one asset amount across a capped Boost campaign and its Base vault
+ * Deposits one asset amount across nested inner and outer Earn vaults
  * in one atomic Tempo transaction.
  *
  * @example
@@ -672,41 +672,41 @@ export namespace depositSync {
  *   transport: http(),
  * })
  *
- * const hash = await Actions.earn.depositCampaign(client, {
+ * const hash = await Actions.earn.depositNested(client, {
  *   allocation: {
  *     assetAmount: 100_000_000n,
- *     baseAssetAmount: 40_000_000n,
- *     boostAssetAmount: 60_000_000n,
+ *     innerAssetAmount: 40_000_000n,
+ *     outerAssetAmount: 60_000_000n,
  *   },
- *   baseShareAmountMin: 39_500_000n,
- *   baseVault: '0x...',
- *   boostShareAmountMin: 59_000_000n,
- *   boostVault: '0x...',
+ *   innerShareAmountMin: 39_500_000n,
+ *   innerVault: '0x...',
+ *   outerShareAmountMin: 59_000_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign, allocation, recipient, and per-leg output bounds.
+ * @param parameters - NestedEarnVaults, allocation, recipient, and per-leg output bounds.
  * @returns The transaction hash.
  */
-export async function depositCampaign<
+export async function depositNested<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: depositCampaign.Parameters<chain, account>,
-): Promise<depositCampaign.ReturnValue> {
-  return depositCampaign.inner(sendTransaction, client, parameters)
+  parameters: depositNested.Parameters<chain, account>,
+): Promise<depositNested.ReturnValue> {
+  return depositNested.inner(sendTransaction, client, parameters)
 }
 
-export namespace depositCampaign {
-  export type Args = Campaign & {
-    /** Asset split returned by {@link getCampaignAllocation}. */
-    allocation: CampaignAllocation
-    /** Minimum Base Earn shares for the direct Base leg; zero only for an empty leg. */
-    baseShareAmountMin: bigint
-    /** Minimum Boost Earn shares for the Boost leg; zero only for an empty leg. */
-    boostShareAmountMin: bigint
+export namespace depositNested {
+  export type Args = NestedEarnVaults & {
+    /** Asset split returned by {@link getNestedAllocation}. */
+    allocation: NestedAllocation
+    /** Minimum Inner Earn shares for the direct Inner leg; zero only for an empty leg. */
+    innerShareAmountMin: bigint
+    /** Minimum Outer Earn shares for the Outer leg; zero only for an empty leg. */
+    outerShareAmountMin: bigint
     /** Earn share recipient. @default `account.address` */
     recipient?: Address | undefined
   }
@@ -718,7 +718,7 @@ export namespace depositCampaign {
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** @internal Shared dispatch for Base and Boost deposit calls. */
+  /** @internal Shared dispatch for Inner and Outer deposit calls. */
   export async function inner<
     action extends typeof sendTransaction | typeof sendTransactionSync,
     chain extends Chain | undefined,
@@ -728,7 +728,7 @@ export namespace depositCampaign {
     client: Client<Transport, chain, account>,
     parameters: Parameters<chain, account>,
   ): Promise<ReturnType<action>> {
-    const assetToken = await getCampaignAsset(client, parameters)
+    const assetToken = await getNestedAsset(client, parameters)
     return (await action(client, {
       ...parameters,
       calls: calls({
@@ -740,8 +740,8 @@ export namespace depositCampaign {
   }
 
   /**
-   * Defines the approvals and bounded Base and Boost deposit calls. The
-   * allocation is signed exactly; stale Boost capacity reverts the batch.
+   * Defines the approvals and bounded Inner and Outer deposit calls. The
+   * allocation is signed exactly; stale Outer capacity reverts the batch.
    */
   export function calls(
     args: Args & {
@@ -754,45 +754,41 @@ export namespace depositCampaign {
     const {
       allocation,
       assetToken,
-      baseShareAmountMin,
-      baseVault,
-      boostShareAmountMin,
-      boostVault,
+      innerShareAmountMin,
+      innerVault,
+      outerShareAmountMin,
+      outerVault,
       recipient,
     } = args
-    validateCampaignVaults({ baseVault, boostVault })
-    validateCampaignAllocation(allocation)
-    validateCampaignLeg(allocation.baseAssetAmount, baseShareAmountMin, 'Base')
-    validateCampaignLeg(
-      allocation.boostAssetAmount,
-      boostShareAmountMin,
-      'Boost',
-    )
+    validateNestedVaults({ innerVault, outerVault })
+    validateNestedAllocation(allocation)
+    validateNestedLeg(allocation.innerAssetAmount, innerShareAmountMin, 'Inner')
+    validateNestedLeg(allocation.outerAssetAmount, outerShareAmountMin, 'Outer')
     return [
-      ...(allocation.boostAssetAmount === 0n
+      ...(allocation.outerAssetAmount === 0n
         ? []
         : deposit.calls({
-            assetAmount: allocation.boostAssetAmount,
+            assetAmount: allocation.outerAssetAmount,
             assetToken,
             recipient,
-            shareAmountMin: boostShareAmountMin,
-            vault: boostVault,
+            shareAmountMin: outerShareAmountMin,
+            vault: outerVault,
           })),
-      ...(allocation.baseAssetAmount === 0n
+      ...(allocation.innerAssetAmount === 0n
         ? []
         : deposit.calls({
-            assetAmount: allocation.baseAssetAmount,
+            assetAmount: allocation.innerAssetAmount,
             assetToken,
             recipient,
-            shareAmountMin: baseShareAmountMin,
-            vault: baseVault,
+            shareAmountMin: innerShareAmountMin,
+            vault: innerVault,
           })),
     ]
   }
 }
 
 /**
- * Deposits across a campaign and returns the confirmed receipt and per-tier
+ * Deposits across nested Earn vaults and returns the confirmed receipt and per-vault
  * event data.
  *
  * @example
@@ -808,37 +804,37 @@ export namespace depositCampaign {
  *   transport: http(),
  * })
  *
- * const result = await Actions.earn.depositCampaignSync(client, {
+ * const result = await Actions.earn.depositNestedSync(client, {
  *   allocation: {
  *     assetAmount: 100_000_000n,
- *     baseAssetAmount: 40_000_000n,
- *     boostAssetAmount: 60_000_000n,
+ *     innerAssetAmount: 40_000_000n,
+ *     outerAssetAmount: 60_000_000n,
  *   },
- *   baseShareAmountMin: 39_500_000n,
- *   baseVault: '0x...',
- *   boostShareAmountMin: 59_000_000n,
- *   boostVault: '0x...',
+ *   innerShareAmountMin: 39_500_000n,
+ *   innerVault: '0x...',
+ *   outerShareAmountMin: 59_000_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign deposit parameters.
- * @returns The confirmed receipt and each nonempty campaign leg.
+ * @param parameters - NestedEarnVaults deposit parameters.
+ * @returns The confirmed receipt and each nonempty vault leg.
  */
-export async function depositCampaignSync<
+export async function depositNestedSync<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: depositCampaignSync.Parameters<chain, account>,
-): Promise<depositCampaignSync.ReturnValue> {
+  parameters: depositNestedSync.Parameters<chain, account>,
+): Promise<depositNestedSync.ReturnValue> {
   const {
     allocation,
-    baseVault,
-    boostVault,
+    innerVault,
+    outerVault,
     throwOnReceiptRevert = true,
   } = parameters
-  const receipt = await depositCampaign.inner(sendTransactionSync, client, {
+  const receipt = await depositNested.inner(sendTransactionSync, client, {
     ...parameters,
     throwOnReceiptRevert,
   } as never)
@@ -850,27 +846,29 @@ export async function depositCampaignSync<
     }
   }
   return {
-    // The Boost leg recursively emits from Base first. Since the direct Base
-    // leg is dispatched last, its event is the final Base-vault match.
-    base:
-      allocation.baseAssetAmount === 0n ? undefined : toLeg(baseVault, 'last'),
-    boost: allocation.boostAssetAmount === 0n ? undefined : toLeg(boostVault),
+    // The Outer leg recursively emits from Inner first. Since the direct Inner
+    // leg is dispatched last, its event is the final Inner-vault match.
+    inner:
+      allocation.innerAssetAmount === 0n
+        ? undefined
+        : toLeg(innerVault, 'last'),
+    outer: allocation.outerAssetAmount === 0n ? undefined : toLeg(outerVault),
     receipt,
   }
 }
 
-export namespace depositCampaignSync {
-  export type Args = depositCampaign.Args
+export namespace depositNestedSync {
+  export type Args = depositNested.Args
   export type Parameters<
     chain extends Chain | undefined = Chain | undefined,
     account extends Account | undefined = Account | undefined,
-  > = depositCampaign.Parameters<chain, account> &
+  > = depositNested.Parameters<chain, account> &
     WriteSyncParameters<chain, account>
   export type ReturnValue = {
-    /** Confirmed direct Base deposit, when the Base leg was nonempty. */
-    base?: { assetAmount: bigint; shareAmount: bigint } | undefined
-    /** Confirmed Boost deposit, when the Boost leg was nonempty. */
-    boost?: { assetAmount: bigint; shareAmount: bigint } | undefined
+    /** Confirmed direct Inner deposit, when the Inner leg was nonempty. */
+    inner?: { assetAmount: bigint; shareAmount: bigint } | undefined
+    /** Confirmed Outer deposit, when the Outer leg was nonempty. */
+    outer?: { assetAmount: bigint; shareAmount: bigint } | undefined
     /** Confirmed atomic transaction receipt. */
     receipt: TransactionReceipt
   }
@@ -1827,26 +1825,26 @@ export namespace getPosition {
   export type ErrorType = BaseErrorType
 }
 
-/** Addresses that define one capped Earn campaign over a Base Earn vault. */
-export type Campaign = {
-  /** Persistent Base Earn vault. */
-  baseVault: Address
-  /** Capped Boost Earn vault backed by the Base vault. */
-  boostVault: Address
+/** Addresses that define one nested Earn composition. */
+export type NestedEarnVaults = {
+  /** Persistent inner Earn vault. */
+  innerVault: Address
+  /** Capped outer Earn vault backed by the inner vault. */
+  outerVault: Address
 }
 
-/** Asset allocation across the Base and Boost campaign tiers. */
-export type CampaignAllocation = {
+/** Asset allocation across the inner and outer vaults. */
+export type NestedAllocation = {
   /** Total assets requested. */
   assetAmount: bigint
-  /** Assets routed directly to the Base vault. */
-  baseAssetAmount: bigint
-  /** Assets admitted to the Boost vault. */
-  boostAssetAmount: bigint
+  /** Assets routed directly to the inner vault. */
+  innerAssetAmount: bigint
+  /** Assets admitted to the outer vault. */
+  outerAssetAmount: bigint
 }
 
 /**
- * Gets an account's unified Base and Boost Earn campaign position.
+ * Gets an account's unified nested Earn position.
  *
  * @example
  * ```ts
@@ -1859,57 +1857,57 @@ export type CampaignAllocation = {
  *   transport: http(),
  * })
  *
- * const position = await Actions.earn.getCampaignPosition(client, {
+ * const position = await Actions.earn.getNestedPosition(client, {
  *   account: '0x...',
- *   baseVault: '0x...',
- *   boostVault: '0x...',
+ *   innerVault: '0x...',
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Account and campaign vaults.
+ * @param parameters - Account and nested vaults.
  * @returns Both share positions and their aggregate asset value.
  */
-export async function getCampaignPosition<
+export async function getNestedPosition<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: getCampaignPosition.Parameters<account>,
-): Promise<getCampaignPosition.ReturnValue> {
-  const { account, baseVault, boostVault, ...rest } = parameters
-  validateCampaignVaults({ baseVault, boostVault })
-  const [base, boost] = await Promise.all([
-    getPosition(client, { ...rest, account, vault: baseVault } as never),
-    getPosition(client, { ...rest, account, vault: boostVault } as never),
-    validateCampaignBinding(client, { baseVault, boostVault }),
+  parameters: getNestedPosition.Parameters<account>,
+): Promise<getNestedPosition.ReturnValue> {
+  const { account, innerVault, outerVault, ...rest } = parameters
+  validateNestedVaults({ innerVault, outerVault })
+  const [inner, outer] = await Promise.all([
+    getPosition(client, { ...rest, account, vault: innerVault } as never),
+    getPosition(client, { ...rest, account, vault: outerVault } as never),
+    validateNestedBinding(client, { innerVault, outerVault }),
   ])
-  if (!isAddressEqual(base.assetToken, boost.assetToken))
-    throw new Error('Base and Boost vault assets do not match.')
+  if (!isAddressEqual(inner.assetToken, outer.assetToken))
+    throw new Error('Inner and outer vault assets do not match.')
   return {
-    assetBalance: base.assetBalance,
-    assetToken: base.assetToken,
-    base,
-    boost,
-    totalValue: base.value + boost.value,
+    assetBalance: inner.assetBalance,
+    assetToken: inner.assetToken,
+    inner,
+    outer,
+    totalValue: inner.value + outer.value,
   }
 }
 
-export namespace getCampaignPosition {
+export namespace getNestedPosition {
   export type Args<account extends Account | undefined = Account | undefined> =
-    GetAccountParameter<account> & Campaign
+    GetAccountParameter<account> & NestedEarnVaults
   export type Parameters<
     account extends Account | undefined = Account | undefined,
   > = Omit<ReadParameters, 'account'> & Args<account>
   export type ReturnValue = {
-    /** Asset balance shared by both campaign tiers. */
+    /** Asset balance shared by both nested tiers. */
     assetBalance: bigint
-    /** Token accepted by both campaign vaults. */
+    /** Token accepted by both nested vaults. */
     assetToken: Address
-    /** Direct Base Earn position. */
-    base: getPosition.ReturnValue
-    /** Capped Boost Earn position. */
-    boost: getPosition.ReturnValue
+    /** Direct inner Earn position. */
+    inner: getPosition.ReturnValue
+    /** Capped outer Earn position. */
+    outer: getPosition.ReturnValue
     /** Aggregate redeemable asset value across both share tokens. */
     totalValue: bigint
   }
@@ -1918,7 +1916,7 @@ export namespace getCampaignPosition {
 }
 
 /**
- * Gets the currently available Base and Boost allocation for a deposit.
+ * Gets the currently available inner and outer allocation for a deposit.
  *
  * @example
  * ```ts
@@ -1931,56 +1929,56 @@ export namespace getCampaignPosition {
  *   transport: http(),
  * })
  *
- * const allocation = await Actions.earn.getCampaignAllocation(client, {
+ * const allocation = await Actions.earn.getNestedAllocation(client, {
  *   assetAmount: 100_000_000n,
- *   boostVault: '0x...',
+ *   outerVault: '0x...',
  *   recipient: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Requested assets, recipient, and Boost vault.
- * @returns The live Base and Boost asset split.
+ * @param parameters - Requested assets, recipient, and outer vault.
+ * @returns The live inner and outer asset split.
  */
-export async function getCampaignAllocation<chain extends Chain | undefined>(
+export async function getNestedAllocation<chain extends Chain | undefined>(
   client: Client<Transport, chain>,
-  parameters: getCampaignAllocation.Parameters,
-): Promise<getCampaignAllocation.ReturnValue> {
-  const { assetAmount, boostVault, recipient, ...rest } = parameters
+  parameters: getNestedAllocation.Parameters,
+): Promise<getNestedAllocation.ReturnValue> {
+  const { assetAmount, outerVault, recipient, ...rest } = parameters
   if (assetAmount <= 0n)
-    throw new Error('Campaign asset amount must be greater than zero.')
-  const boostAssetAmount = await readContract(client, {
+    throw new Error('Nested asset amount must be greater than zero.')
+  const outerAssetAmount = await readContract(client, {
     ...rest,
-    ...getCampaignAllocation.call({ assetAmount, boostVault, recipient }),
+    ...getNestedAllocation.call({ assetAmount, outerVault, recipient }),
   })
-  if (boostAssetAmount > assetAmount)
-    throw new Error('Boost allocation exceeds the requested assets.')
+  if (outerAssetAmount > assetAmount)
+    throw new Error('Outer allocation exceeds the requested assets.')
   return {
     assetAmount,
-    baseAssetAmount: assetAmount - boostAssetAmount,
-    boostAssetAmount,
+    innerAssetAmount: assetAmount - outerAssetAmount,
+    outerAssetAmount,
   }
 }
 
-export namespace getCampaignAllocation {
+export namespace getNestedAllocation {
   export type Args = {
     /** Assets to allocate, base units. */
     assetAmount: bigint
-    /** Capped Boost Earn vault. */
-    boostVault: Address
+    /** Capped outer Earn vault. */
+    outerVault: Address
     /** Earn share recipient whose public receiver cap applies. */
     recipient: Address
   }
   export type Parameters = Omit<ReadParameters, 'account'> & Args
-  export type ReturnValue = CampaignAllocation
+  export type ReturnValue = NestedAllocation
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** Defines the Boost vault allocation preview call. */
+  /** Defines the Outer vault allocation preview call. */
   export function call(args: Args) {
-    const { assetAmount, boostVault, recipient } = args
+    const { assetAmount, outerVault, recipient } = args
     return defineCall({
-      address: boostVault,
+      address: outerVault,
       abi: Abis.earnVault,
       args: [recipient, assetAmount],
       functionName: 'previewAllocation',
@@ -1989,7 +1987,7 @@ export namespace getCampaignAllocation {
 }
 
 /**
- * Converts a quoted Base Earn share output into the corresponding Boost Earn
+ * Converts a quoted inner Earn share output into the corresponding outer Earn
  * share output.
  *
  * @example
@@ -2003,35 +2001,35 @@ export namespace getCampaignAllocation {
  *   transport: http(),
  * })
  *
- * const boostShareAmount = await Actions.earn.getCampaignBoostQuote(client, {
- *   baseShareAmount: 99_500_000n,
- *   boostVault: '0x...',
+ * const outerShareAmount = await Actions.earn.getOuterShareQuote(client, {
+ *   innerShareAmount: 99_500_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Base share quote and Boost vault.
- * @returns The fee-aware Boost Earn share output.
+ * @param parameters - Inner share quote and outer vault.
+ * @returns The fee-aware outer Earn share output.
  */
-export async function getCampaignBoostQuote<chain extends Chain | undefined>(
+export async function getOuterShareQuote<chain extends Chain | undefined>(
   client: Client<Transport, chain>,
-  parameters: getCampaignBoostQuote.Parameters,
-): Promise<getCampaignBoostQuote.ReturnValue> {
-  const { baseShareAmount, boostVault, ...rest } = parameters
-  if (baseShareAmount <= 0n)
-    throw new Error('Base share amount must be greater than zero.')
+  parameters: getOuterShareQuote.Parameters,
+): Promise<getOuterShareQuote.ReturnValue> {
+  const { innerShareAmount, outerVault, ...rest } = parameters
+  if (innerShareAmount <= 0n)
+    throw new Error('Inner share amount must be greater than zero.')
   return readContract(client, {
     ...rest,
-    ...getCampaignBoostQuote.call({ baseShareAmount, boostVault }),
+    ...getOuterShareQuote.call({ innerShareAmount, outerVault }),
   })
 }
 
-export namespace getCampaignBoostQuote {
+export namespace getOuterShareQuote {
   export type Args = {
-    /** Base Earn shares expected from the Boost asset leg. */
-    baseShareAmount: bigint
-    /** Capped Boost Earn vault. */
-    boostVault: Address
+    /** Inner Earn shares expected from the outer asset leg. */
+    innerShareAmount: bigint
+    /** Capped outer Earn vault. */
+    outerVault: Address
   }
   export type Parameters = Omit<ReadParameters, 'account'> & Args
   export type ReturnValue = ReadContractReturnType<
@@ -2042,20 +2040,20 @@ export namespace getCampaignBoostQuote {
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** Defines the Boost share quote call. */
+  /** Defines the Outer share quote call. */
   export function call(args: Args) {
-    const { baseShareAmount, boostVault } = args
+    const { innerShareAmount, outerVault } = args
     return defineCall({
-      address: boostVault,
+      address: outerVault,
       abi: Abis.earnVault,
-      args: [baseShareAmount],
+      args: [innerShareAmount],
       functionName: 'previewDepositEngineShares',
     })
   }
 }
 
 /**
- * Gets fee-aware Base and Boost redemption quotes for one campaign position.
+ * Gets fee-aware inner and outer redemption quotes for one nested position.
  *
  * @example
  * ```ts
@@ -2068,68 +2066,73 @@ export namespace getCampaignBoostQuote {
  *   transport: http(),
  * })
  *
- * const quote = await Actions.earn.getCampaignRedeemQuote(client, {
- *   baseShareAmount: 40_000_000n,
- *   baseVault: '0x...',
- *   boostShareAmount: 60_000_000n,
- *   boostVault: '0x...',
+ * const quote = await Actions.earn.getNestedRedeemQuote(client, {
+ *   innerShareAmount: 40_000_000n,
+ *   innerVault: '0x...',
+ *   outerShareAmount: 60_000_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign vaults and exact share inputs.
- * @returns Independent Base and Boost asset outputs and their sum.
+ * @param parameters - Nested vaults and exact share inputs.
+ * @returns Independent inner and outer asset outputs and their sum.
  */
-export async function getCampaignRedeemQuote<chain extends Chain | undefined>(
+export async function getNestedRedeemQuote<chain extends Chain | undefined>(
   client: Client<Transport, chain>,
-  parameters: getCampaignRedeemQuote.Parameters,
-): Promise<getCampaignRedeemQuote.ReturnValue> {
-  const { baseShareAmount, baseVault, boostShareAmount, boostVault, ...rest } =
-    parameters
-  validateCampaignVaults({ baseVault, boostVault })
-  if (baseShareAmount < 0n || boostShareAmount < 0n)
-    throw new Error('Campaign share amounts cannot be negative.')
-  if (baseShareAmount === 0n && boostShareAmount === 0n)
+  parameters: getNestedRedeemQuote.Parameters,
+): Promise<getNestedRedeemQuote.ReturnValue> {
+  const {
+    innerShareAmount,
+    innerVault,
+    outerShareAmount,
+    outerVault,
+    ...rest
+  } = parameters
+  validateNestedVaults({ innerVault, outerVault })
+  if (innerShareAmount < 0n || outerShareAmount < 0n)
+    throw new Error('Nested share amounts cannot be negative.')
+  if (innerShareAmount === 0n && outerShareAmount === 0n)
     throw new Error(
-      'At least one campaign share amount must be greater than zero.',
+      'At least one nested share amount must be greater than zero.',
     )
-  const [baseAssetAmount, boostAssetAmount] = await Promise.all([
-    baseShareAmount === 0n
+  const [innerAssetAmount, outerAssetAmount] = await Promise.all([
+    innerShareAmount === 0n
       ? 0n
       : getRedeemQuote(client, {
           ...rest,
-          shareAmount: baseShareAmount,
-          vault: baseVault,
+          shareAmount: innerShareAmount,
+          vault: innerVault,
         }),
-    boostShareAmount === 0n
+    outerShareAmount === 0n
       ? 0n
       : getRedeemQuote(client, {
           ...rest,
-          shareAmount: boostShareAmount,
-          vault: boostVault,
+          shareAmount: outerShareAmount,
+          vault: outerVault,
         }),
-    getCampaignAsset(client, { baseVault, boostVault }),
+    getNestedAsset(client, { innerVault, outerVault }),
   ])
   return {
-    baseAssetAmount,
-    boostAssetAmount,
-    totalAssetAmount: baseAssetAmount + boostAssetAmount,
+    innerAssetAmount,
+    outerAssetAmount,
+    totalAssetAmount: innerAssetAmount + outerAssetAmount,
   }
 }
 
-export namespace getCampaignRedeemQuote {
-  export type Args = Campaign & {
-    /** Exact Base Earn share input. */
-    baseShareAmount: bigint
-    /** Exact Boost Earn share input. */
-    boostShareAmount: bigint
+export namespace getNestedRedeemQuote {
+  export type Args = NestedEarnVaults & {
+    /** Exact Inner Earn share input. */
+    innerShareAmount: bigint
+    /** Exact Outer Earn share input. */
+    outerShareAmount: bigint
   }
   export type Parameters = Omit<ReadParameters, 'account'> & Args
   export type ReturnValue = {
-    /** Assets quoted from the Base share leg. */
-    baseAssetAmount: bigint
-    /** Assets quoted from the Boost share leg. */
-    boostAssetAmount: bigint
+    /** Assets quoted from the Inner share leg. */
+    innerAssetAmount: bigint
+    /** Assets quoted from the Outer share leg. */
+    outerAssetAmount: bigint
     /** Aggregate quoted asset output. */
     totalAssetAmount: bigint
   }
@@ -2138,7 +2141,7 @@ export namespace getCampaignRedeemQuote {
 }
 
 /**
- * Gets the Base Earn shares returned by an in-kind Boost migration.
+ * Gets the inner Earn shares returned by in-kind outer unwrapping.
  *
  * @example
  * ```ts
@@ -2151,40 +2154,38 @@ export namespace getCampaignRedeemQuote {
  *   transport: http(),
  * })
  *
- * const baseShareAmount = await Actions.earn.getCampaignMigrationQuote(
+ * const innerShareAmount = await Actions.earn.getUnwrapQuote(
  *   client,
  *   {
- *     boostShareAmount: 100_000_000n,
- *     boostVault: '0x...',
+ *     outerShareAmount: 100_000_000n,
+ *     outerVault: '0x...',
  *   },
  * )
  * ```
  *
  * @param client - Client.
- * @param parameters - Exact Boost shares and Boost vault.
- * @returns The fee-aware Base Earn share output.
+ * @param parameters - Exact outer shares and outer vault.
+ * @returns The fee-aware inner Earn share output.
  */
-export async function getCampaignMigrationQuote<
-  chain extends Chain | undefined,
->(
+export async function getUnwrapQuote<chain extends Chain | undefined>(
   client: Client<Transport, chain>,
-  parameters: getCampaignMigrationQuote.Parameters,
-): Promise<getCampaignMigrationQuote.ReturnValue> {
-  const { boostShareAmount, boostVault, ...rest } = parameters
-  if (boostShareAmount <= 0n)
-    throw new Error('Boost share amount must be greater than zero.')
+  parameters: getUnwrapQuote.Parameters,
+): Promise<getUnwrapQuote.ReturnValue> {
+  const { outerShareAmount, outerVault, ...rest } = parameters
+  if (outerShareAmount <= 0n)
+    throw new Error('Outer share amount must be greater than zero.')
   return readContract(client, {
     ...rest,
-    ...getCampaignMigrationQuote.call({ boostShareAmount, boostVault }),
+    ...getUnwrapQuote.call({ outerShareAmount, outerVault }),
   })
 }
 
-export namespace getCampaignMigrationQuote {
+export namespace getUnwrapQuote {
   export type Args = {
-    /** Exact Boost Earn share input. */
-    boostShareAmount: bigint
-    /** Capped Boost Earn vault. */
-    boostVault: Address
+    /** Exact outer Earn share input. */
+    outerShareAmount: bigint
+    /** Capped outer Earn vault. */
+    outerVault: Address
   }
   export type Parameters = Omit<ReadParameters, 'account'> & Args
   export type ReturnValue = ReadContractReturnType<
@@ -2195,13 +2196,13 @@ export namespace getCampaignMigrationQuote {
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** Defines the in-kind Boost migration quote call. */
+  /** Defines the in-kind Outer unwrapping quote call. */
   export function call(args: Args) {
-    const { boostShareAmount, boostVault } = args
+    const { outerShareAmount, outerVault } = args
     return defineCall({
-      address: boostVault,
+      address: outerVault,
       abi: Abis.earnVault,
-      args: [boostShareAmount],
+      args: [outerShareAmount],
       functionName: 'previewRedeemVenueShares',
     })
   }
@@ -2953,7 +2954,7 @@ export namespace redeemSync {
 }
 
 /**
- * Redeems Base and Boost Earn shares in one atomic Tempo transaction.
+ * Redeems inner and outer Earn shares in one atomic Tempo transaction.
  *
  * @example
  * ```ts
@@ -2968,51 +2969,51 @@ export namespace redeemSync {
  *   transport: http(),
  * })
  *
- * const hash = await Actions.earn.redeemCampaign(client, {
- *   baseAssetAmount: 40_000_000n,
- *   baseShareAmount: 40_000_000n,
- *   baseVault: '0x...',
- *   boostAssetAmount: 60_000_000n,
- *   boostShareAmount: 60_000_000n,
- *   boostVault: '0x...',
+ * const hash = await Actions.earn.redeemNested(client, {
+ *   innerAssetAmount: 40_000_000n,
+ *   innerShareAmount: 40_000_000n,
+ *   innerVault: '0x...',
+ *   outerAssetAmount: 60_000_000n,
+ *   outerShareAmount: 60_000_000n,
+ *   outerVault: '0x...',
  *   slippageBps: 50,
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign shares, recipient, and per-leg output bounds.
+ * @param parameters - Nested shares, recipient, and per-leg output bounds.
  * @returns The transaction hash.
  */
-export async function redeemCampaign<
+export async function redeemNested<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: redeemCampaign.Parameters<chain, account>,
-): Promise<redeemCampaign.ReturnValue> {
-  return redeemCampaign.inner(sendTransaction, client, parameters)
+  parameters: redeemNested.Parameters<chain, account>,
+): Promise<redeemNested.ReturnValue> {
+  return redeemNested.inner(sendTransaction, client, parameters)
 }
 
-export namespace redeemCampaign {
-  export type Args = Campaign & {
-    /** Exact Base Earn shares to redeem. */
-    baseShareAmount: bigint
-    /** Exact Boost Earn shares to redeem. */
-    boostShareAmount: bigint
+export namespace redeemNested {
+  export type Args = NestedEarnVaults & {
+    /** Exact Inner Earn shares to redeem. */
+    innerShareAmount: bigint
+    /** Exact Outer Earn shares to redeem. */
+    outerShareAmount: bigint
     /** Asset recipient. @default `account.address` */
     recipient?: Address | undefined
   } & OneOf<
       | {
-          /** Minimum Base asset output; zero only for an empty Base leg. */
-          baseAssetAmountMin: bigint
-          /** Minimum Boost asset output; zero only for an empty Boost leg. */
-          boostAssetAmountMin: bigint
+          /** Minimum Inner asset output; zero only for an empty Inner leg. */
+          innerAssetAmountMin: bigint
+          /** Minimum Outer asset output; zero only for an empty Outer leg. */
+          outerAssetAmountMin: bigint
         }
       | {
-          /** Quoted Base asset output; zero only for an empty Base leg. */
-          baseAssetAmount: bigint
-          /** Quoted Boost asset output; zero only for an empty Boost leg. */
-          boostAssetAmount: bigint
+          /** Quoted Inner asset output; zero only for an empty Inner leg. */
+          innerAssetAmount: bigint
+          /** Quoted Outer asset output; zero only for an empty Outer leg. */
+          outerAssetAmount: bigint
           /** Slippage tolerance applied independently to both nonempty legs. */
           slippageBps: number
         }
@@ -3025,7 +3026,7 @@ export namespace redeemCampaign {
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** @internal Shared dispatch for Base and Boost redemption calls. */
+  /** @internal Shared dispatch for Inner and Outer redemption calls. */
   export async function inner<
     action extends typeof sendTransaction | typeof sendTransactionSync,
     chain extends Chain | undefined,
@@ -3035,84 +3036,84 @@ export namespace redeemCampaign {
     client: Client<Transport, chain, account>,
     parameters: Parameters<chain, account>,
   ): Promise<ReturnType<action>> {
-    const [baseShareToken, boostShareToken] = await Promise.all([
+    const [innerShareToken, outerShareToken] = await Promise.all([
       readContract(client, {
         abi: Abis.earnVault,
-        address: parameters.baseVault,
+        address: parameters.innerVault,
         functionName: 'earnShare',
       }),
       readContract(client, {
         abi: Abis.earnVault,
-        address: parameters.boostVault,
+        address: parameters.outerVault,
         functionName: 'earnShare',
       }),
-      getCampaignAsset(client, parameters),
+      getNestedAsset(client, parameters),
     ])
     return (await action(client, {
       ...parameters,
       calls: calls({
         ...parameters,
-        baseShareToken,
-        boostShareToken,
+        innerShareToken,
+        outerShareToken,
         recipient: resolveRecipient(client, parameters),
       }),
     } as never)) as never
   }
 
-  /** Defines the approvals and bounded Base and Boost redemption calls. */
+  /** Defines the approvals and bounded Inner and Outer redemption calls. */
   export function calls(
     args: Args & {
-      /** Base Earn share token. */
-      baseShareToken: Address
-      /** Boost Earn share token. */
-      boostShareToken: Address
+      /** Inner Earn share token. */
+      innerShareToken: Address
+      /** Outer Earn share token. */
+      outerShareToken: Address
       /** Asset recipient. */
       recipient: Address
     },
   ) {
     const {
-      baseShareAmount,
-      baseShareToken,
-      baseVault,
-      boostShareAmount,
-      boostShareToken,
-      boostVault,
+      innerShareAmount,
+      innerShareToken,
+      innerVault,
+      outerShareAmount,
+      outerShareToken,
+      outerVault,
       recipient,
     } = args
-    validateCampaignVaults({ baseVault, boostVault })
-    const { baseAssetAmountMin, boostAssetAmountMin } =
-      campaignRedeemMinimums(args)
-    validateCampaignLeg(baseShareAmount, baseAssetAmountMin, 'Base')
-    validateCampaignLeg(boostShareAmount, boostAssetAmountMin, 'Boost')
-    if (baseShareAmount === 0n && boostShareAmount === 0n)
+    validateNestedVaults({ innerVault, outerVault })
+    const { innerAssetAmountMin, outerAssetAmountMin } =
+      nestedRedeemMinimums(args)
+    validateNestedLeg(innerShareAmount, innerAssetAmountMin, 'Inner')
+    validateNestedLeg(outerShareAmount, outerAssetAmountMin, 'Outer')
+    if (innerShareAmount === 0n && outerShareAmount === 0n)
       throw new Error(
-        'At least one campaign share amount must be greater than zero.',
+        'At least one nested share amount must be greater than zero.',
       )
     return [
-      ...(boostShareAmount === 0n
+      ...(outerShareAmount === 0n
         ? []
         : redeem.calls({
-            assetAmountMin: boostAssetAmountMin,
+            assetAmountMin: outerAssetAmountMin,
             recipient,
-            shareAmount: boostShareAmount,
-            shareToken: boostShareToken,
-            vault: boostVault,
+            shareAmount: outerShareAmount,
+            shareToken: outerShareToken,
+            vault: outerVault,
           })),
-      ...(baseShareAmount === 0n
+      ...(innerShareAmount === 0n
         ? []
         : redeem.calls({
-            assetAmountMin: baseAssetAmountMin,
+            assetAmountMin: innerAssetAmountMin,
             recipient,
-            shareAmount: baseShareAmount,
-            shareToken: baseShareToken,
-            vault: baseVault,
+            shareAmount: innerShareAmount,
+            shareToken: innerShareToken,
+            vault: innerVault,
           })),
     ]
   }
 }
 
 /**
- * Redeems a campaign position and returns the confirmed receipt and per-tier
+ * Redeems a nested position and returns the confirmed receipt and per-vault
  * event data.
  *
  * @example
@@ -3128,35 +3129,35 @@ export namespace redeemCampaign {
  *   transport: http(),
  * })
  *
- * const result = await Actions.earn.redeemCampaignSync(client, {
- *   baseAssetAmountMin: 39_500_000n,
- *   baseShareAmount: 40_000_000n,
- *   baseVault: '0x...',
- *   boostAssetAmountMin: 59_000_000n,
- *   boostShareAmount: 60_000_000n,
- *   boostVault: '0x...',
+ * const result = await Actions.earn.redeemNestedSync(client, {
+ *   innerAssetAmountMin: 39_500_000n,
+ *   innerShareAmount: 40_000_000n,
+ *   innerVault: '0x...',
+ *   outerAssetAmountMin: 59_000_000n,
+ *   outerShareAmount: 60_000_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign redemption parameters.
+ * @param parameters - Nested redemption parameters.
  * @returns The confirmed receipt and each nonempty redemption leg.
  */
-export async function redeemCampaignSync<
+export async function redeemNestedSync<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: redeemCampaignSync.Parameters<chain, account>,
-): Promise<redeemCampaignSync.ReturnValue> {
+  parameters: redeemNestedSync.Parameters<chain, account>,
+): Promise<redeemNestedSync.ReturnValue> {
   const {
-    baseShareAmount,
-    baseVault,
-    boostShareAmount,
-    boostVault,
+    innerShareAmount,
+    innerVault,
+    outerShareAmount,
+    outerVault,
     throwOnReceiptRevert = true,
   } = parameters
-  const receipt = await redeemCampaign.inner(sendTransactionSync, client, {
+  const receipt = await redeemNested.inner(sendTransactionSync, client, {
     ...parameters,
     throwOnReceiptRevert,
   } as never)
@@ -3168,26 +3169,26 @@ export async function redeemCampaignSync<
     }
   }
   return {
-    // The Boost leg recursively emits from Base first. The user's direct Base
-    // redemption is the final Base-vault match.
-    base: baseShareAmount === 0n ? undefined : toLeg(baseVault, 'last'),
-    boost: boostShareAmount === 0n ? undefined : toLeg(boostVault),
+    // The Outer leg recursively emits from Inner first. The user's direct Inner
+    // redemption is the final Inner-vault match.
+    inner: innerShareAmount === 0n ? undefined : toLeg(innerVault, 'last'),
+    outer: outerShareAmount === 0n ? undefined : toLeg(outerVault),
     receipt,
   }
 }
 
-export namespace redeemCampaignSync {
-  export type Args = redeemCampaign.Args
+export namespace redeemNestedSync {
+  export type Args = redeemNested.Args
   export type Parameters<
     chain extends Chain | undefined = Chain | undefined,
     account extends Account | undefined = Account | undefined,
-  > = redeemCampaign.Parameters<chain, account> &
+  > = redeemNested.Parameters<chain, account> &
     WriteSyncParameters<chain, account>
   export type ReturnValue = {
-    /** Confirmed Base redemption, when the Base leg was nonempty. */
-    base?: { assetAmount: bigint; shareAmount: bigint } | undefined
-    /** Confirmed Boost redemption, when the Boost leg was nonempty. */
-    boost?: { assetAmount: bigint; shareAmount: bigint } | undefined
+    /** Confirmed Inner redemption, when the Inner leg was nonempty. */
+    inner?: { assetAmount: bigint; shareAmount: bigint } | undefined
+    /** Confirmed Outer redemption, when the Outer leg was nonempty. */
+    outer?: { assetAmount: bigint; shareAmount: bigint } | undefined
     /** Confirmed atomic transaction receipt. */
     receipt: TransactionReceipt
   }
@@ -3196,7 +3197,7 @@ export namespace redeemCampaignSync {
 }
 
 /**
- * Converts Boost Earn shares directly into their backing Base Earn shares
+ * Converts outer Earn shares directly into their backing inner Earn shares
  * without redeeming the underlying asset.
  *
  * @example
@@ -3212,45 +3213,45 @@ export namespace redeemCampaignSync {
  *   transport: http(),
  * })
  *
- * const hash = await Actions.earn.migrateCampaign(client, {
- *   baseShareAmount: 99_500_000n,
- *   boostShareAmount: 100_000_000n,
- *   boostVault: '0x...',
+ * const hash = await Actions.earn.unwrapNested(client, {
+ *   innerShareAmount: 99_500_000n,
+ *   outerShareAmount: 100_000_000n,
+ *   outerVault: '0x...',
  *   slippageBps: 50,
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Boost shares, recipient, and Base share output bound.
+ * @param parameters - Outer shares, recipient, and inner share output bound.
  * @returns The transaction hash.
  */
-export async function migrateCampaign<
+export async function unwrapNested<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: migrateCampaign.Parameters<chain, account>,
-): Promise<migrateCampaign.ReturnValue> {
-  return migrateCampaign.inner(sendTransaction, client, parameters)
+  parameters: unwrapNested.Parameters<chain, account>,
+): Promise<unwrapNested.ReturnValue> {
+  return unwrapNested.inner(sendTransaction, client, parameters)
 }
 
-export namespace migrateCampaign {
+export namespace unwrapNested {
   export type Args = {
-    /** Exact Boost Earn shares to convert. */
-    boostShareAmount: bigint
-    /** Capped Boost Earn vault. */
-    boostVault: Address
-    /** Base Earn share recipient. @default `account.address` */
+    /** Exact Outer Earn shares to convert. */
+    outerShareAmount: bigint
+    /** Capped Outer Earn vault. */
+    outerVault: Address
+    /** Inner Earn share recipient. @default `account.address` */
     recipient?: Address | undefined
   } & OneOf<
     | {
-        /** Minimum Base Earn share output. */
-        baseShareAmountMin: bigint
+        /** Minimum Inner Earn share output. */
+        innerShareAmountMin: bigint
       }
     | {
-        /** Quoted Base Earn share output. */
-        baseShareAmount: bigint
-        /** Slippage tolerance under `baseShareAmount`. */
+        /** Quoted Inner Earn share output. */
+        innerShareAmount: bigint
+        /** Slippage tolerance under `innerShareAmount`. */
         slippageBps: number
       }
   >
@@ -3262,7 +3263,7 @@ export namespace migrateCampaign {
   // TODO: exhaustive error type
   export type ErrorType = BaseErrorType
 
-  /** @internal Shared dispatch for the holder-authorized migration. */
+  /** @internal Shared dispatch for the holder-authorized unwrapping. */
   export async function inner<
     action extends typeof sendTransaction | typeof sendTransactionSync,
     chain extends Chain | undefined,
@@ -3272,64 +3273,64 @@ export namespace migrateCampaign {
     client: Client<Transport, chain, account>,
     parameters: Parameters<chain, account>,
   ): Promise<ReturnType<action>> {
-    const boostShareToken = await readContract(client, {
+    const outerShareToken = await readContract(client, {
       abi: Abis.earnVault,
-      address: parameters.boostVault,
+      address: parameters.outerVault,
       functionName: 'earnShare',
     })
     return (await action(client, {
       ...parameters,
       calls: calls({
         ...parameters,
-        boostShareToken,
+        outerShareToken,
         recipient: resolveRecipient(client, parameters),
       }),
     } as never)) as never
   }
 
-  /** Defines the Boost share approval and in-kind migration calls. */
+  /** Defines the Outer share approval and in-kind unwrapping calls. */
   export function calls(
     args: Args & {
-      /** Boost Earn share token approved to the Boost vault. */
-      boostShareToken: Address
-      /** Base Earn share recipient. */
+      /** Outer Earn share token approved to the Outer vault. */
+      outerShareToken: Address
+      /** Inner Earn share recipient. */
       recipient: Address
     },
   ) {
-    const { boostShareAmount, boostShareToken, boostVault, recipient } = args
-    if (boostShareAmount <= 0n)
-      throw new Error('Boost share amount must be greater than zero.')
-    const baseShareAmountMin =
-      args.baseShareAmountMin ??
-      EarnShares.minimumOutput(args.baseShareAmount, args.slippageBps)
-    if (baseShareAmountMin <= 0n)
-      throw new Error('Minimum Base share output must be greater than zero.')
+    const { outerShareAmount, outerShareToken, outerVault, recipient } = args
+    if (outerShareAmount <= 0n)
+      throw new Error('Outer share amount must be greater than zero.')
+    const innerShareAmountMin =
+      args.innerShareAmountMin ??
+      EarnShares.minimumOutput(args.innerShareAmount, args.slippageBps)
+    if (innerShareAmountMin <= 0n)
+      throw new Error('Minimum Inner share output must be greater than zero.')
     return [
       defineCall({
-        address: boostShareToken,
+        address: outerShareToken,
         abi: Abis.tip20,
-        args: [boostVault, boostShareAmount],
+        args: [outerVault, outerShareAmount],
         functionName: 'approve',
       }),
       defineCall({
-        address: boostVault,
+        address: outerVault,
         abi: Abis.earnVault,
-        args: [boostShareAmount, recipient, baseShareAmountMin],
+        args: [outerShareAmount, recipient, innerShareAmountMin],
         functionName: 'redeemVenueShares',
       }),
     ]
   }
 
-  /** Extracts the in-kind migration event from the Boost vault logs. */
+  /** Extracts the in-kind unwrapping event from the Outer vault logs. */
   export function extractEvent(
     logs: Log[],
-    parameters: { boostVault: Address },
+    parameters: { outerVault: Address },
   ) {
     const [log] = parseEventLogs({
       abi: Abis.earnVault,
       eventName: 'VenueSharesRedeemed',
       logs: logs.filter((log) =>
-        isAddressEqual(log.address, parameters.boostVault),
+        isAddressEqual(log.address, parameters.outerVault),
       ),
     })
     if (!log) throw new Error('`VenueSharesRedeemed` event not found.')
@@ -3338,8 +3339,8 @@ export namespace migrateCampaign {
 }
 
 /**
- * Converts Boost shares into Base shares and returns the confirmed receipt
- * and migration event data.
+ * Converts outer shares into inner shares and returns the confirmed receipt
+ * and unwrapping event data.
  *
  * @example
  * ```ts
@@ -3354,53 +3355,53 @@ export namespace migrateCampaign {
  *   transport: http(),
  * })
  *
- * const result = await Actions.earn.migrateCampaignSync(client, {
- *   baseShareAmountMin: 99_000_000n,
- *   boostShareAmount: 100_000_000n,
- *   boostVault: '0x...',
+ * const result = await Actions.earn.unwrapNestedSync(client, {
+ *   innerShareAmountMin: 99_000_000n,
+ *   outerShareAmount: 100_000_000n,
+ *   outerVault: '0x...',
  * })
  * ```
  *
  * @param client - Client.
- * @param parameters - Campaign migration parameters.
- * @returns The confirmed receipt and Base share output.
+ * @param parameters - Nested unwrapping parameters.
+ * @returns The confirmed receipt and inner share output.
  */
-export async function migrateCampaignSync<
+export async function unwrapNestedSync<
   chain extends Chain | undefined,
   account extends Account | undefined,
 >(
   client: Client<Transport, chain, account>,
-  parameters: migrateCampaignSync.Parameters<chain, account>,
-): Promise<migrateCampaignSync.ReturnValue> {
-  const { boostVault, throwOnReceiptRevert = true } = parameters
-  const receipt = await migrateCampaign.inner(sendTransactionSync, client, {
+  parameters: unwrapNestedSync.Parameters<chain, account>,
+): Promise<unwrapNestedSync.ReturnValue> {
+  const { outerVault, throwOnReceiptRevert = true } = parameters
+  const receipt = await unwrapNested.inner(sendTransactionSync, client, {
     ...parameters,
     throwOnReceiptRevert,
   } as never)
-  const { args } = migrateCampaign.extractEvent(receipt.logs, { boostVault })
+  const { args } = unwrapNested.extractEvent(receipt.logs, { outerVault })
   return {
-    baseShareAmount: args.venueShares,
-    boostShareAmount: args.earnShares,
+    innerShareAmount: args.venueShares,
+    outerShareAmount: args.earnShares,
     receipt,
     recipient: args.receiver,
   }
 }
 
-export namespace migrateCampaignSync {
-  export type Args = migrateCampaign.Args
+export namespace unwrapNestedSync {
+  export type Args = unwrapNested.Args
   export type Parameters<
     chain extends Chain | undefined = Chain | undefined,
     account extends Account | undefined = Account | undefined,
-  > = migrateCampaign.Parameters<chain, account> &
+  > = unwrapNested.Parameters<chain, account> &
     WriteSyncParameters<chain, account>
   export type ReturnValue = {
-    /** Base Earn shares delivered. */
-    baseShareAmount: bigint
-    /** Boost Earn shares burned. */
-    boostShareAmount: bigint
-    /** Confirmed migration receipt. */
+    /** Inner Earn shares delivered. */
+    innerShareAmount: bigint
+    /** Outer Earn shares burned. */
+    outerShareAmount: bigint
+    /** Confirmed unwrapping receipt. */
     receipt: TransactionReceipt
-    /** Base Earn share recipient. */
+    /** Inner Earn share recipient. */
     recipient: Address
   }
   // TODO: exhaustive error type
@@ -4432,97 +4433,99 @@ async function toWithdrawExactArgs(
 }
 
 /** Validates that a prepared allocation is internally consistent. @internal */
-function validateCampaignAllocation(allocation: CampaignAllocation) {
+function validateNestedAllocation(allocation: NestedAllocation) {
   if (allocation.assetAmount <= 0n)
-    throw new Error('Campaign asset amount must be greater than zero.')
+    throw new Error('Nested asset amount must be greater than zero.')
   if (
-    allocation.baseAssetAmount < 0n ||
-    allocation.boostAssetAmount < 0n ||
-    allocation.baseAssetAmount + allocation.boostAssetAmount !==
+    allocation.innerAssetAmount < 0n ||
+    allocation.outerAssetAmount < 0n ||
+    allocation.innerAssetAmount + allocation.outerAssetAmount !==
       allocation.assetAmount
   )
-    throw new Error('Campaign allocation does not sum to the requested assets.')
+    throw new Error(
+      'NestedEarnVaults allocation does not sum to the requested assets.',
+    )
 }
 
-/** Rejects an ambiguous campaign whose tiers resolve to one vault. @internal */
-function validateCampaignVaults(campaign: Campaign) {
-  if (isAddressEqual(campaign.baseVault, campaign.boostVault))
-    throw new Error('Base and Boost campaign vaults must be different.')
+/** Rejects a composition whose roles resolve to one vault. @internal */
+function validateNestedVaults(nested: NestedEarnVaults) {
+  if (isAddressEqual(nested.innerVault, nested.outerVault))
+    throw new Error('Inner and outer vaults must be different.')
 }
 
-/** Verifies that the Boost vault's nested engine wraps the supplied Base vault. @internal */
-async function validateCampaignBinding(
+/** Verifies that the outer vault's engine wraps the supplied inner vault. @internal */
+async function validateNestedBinding(
   client: Client<Transport, Chain | undefined, Account | undefined>,
-  campaign: Campaign,
+  nested: NestedEarnVaults,
 ) {
-  validateCampaignVaults(campaign)
+  validateNestedVaults(nested)
   const engine = await readContract(client, {
     abi: Abis.earnVault,
-    address: campaign.boostVault,
+    address: nested.outerVault,
     functionName: 'engine',
   })
-  const wrappedBaseVault = await readContract(client, {
+  const wrappedInnerVault = await readContract(client, {
     abi: Abis.earnVaultEngine,
     address: engine,
     functionName: 'baseVault',
   })
-  if (!isAddressEqual(campaign.baseVault, wrappedBaseVault))
-    throw new Error('Boost vault does not wrap the supplied Base vault.')
+  if (!isAddressEqual(nested.innerVault, wrappedInnerVault))
+    throw new Error('Outer vault does not wrap the supplied inner vault.')
 }
 
-/** Resolves and validates the common asset for one nested campaign. @internal */
-async function getCampaignAsset(
+/** Resolves and validates the common asset for one nested composition. @internal */
+async function getNestedAsset(
   client: Client<Transport, Chain | undefined, Account | undefined>,
-  campaign: Campaign,
+  nested: NestedEarnVaults,
 ) {
-  const [baseAsset, boostAsset] = await Promise.all([
+  const [innerAsset, outerAsset] = await Promise.all([
     readContract(client, {
       abi: Abis.earnVault,
-      address: campaign.baseVault,
+      address: nested.innerVault,
       functionName: 'asset',
     }),
     readContract(client, {
       abi: Abis.earnVault,
-      address: campaign.boostVault,
+      address: nested.outerVault,
       functionName: 'asset',
     }),
-    validateCampaignBinding(client, campaign),
+    validateNestedBinding(client, nested),
   ])
-  if (!isAddressEqual(baseAsset, boostAsset))
-    throw new Error('Base and Boost vault assets do not match.')
-  return baseAsset
+  if (!isAddressEqual(innerAsset, outerAsset))
+    throw new Error('Inner and outer vault assets do not match.')
+  return innerAsset
 }
 
-/** Requires a positive bound exactly when a campaign leg is nonempty. @internal */
-function validateCampaignLeg(
+/** Requires a positive bound exactly when a nested leg is nonempty. @internal */
+function validateNestedLeg(
   inputAmount: bigint,
   outputMinimum: bigint,
   label: string,
 ) {
   if (inputAmount < 0n || outputMinimum < 0n)
-    throw new Error(`${label} campaign amounts cannot be negative.`)
+    throw new Error(`${label} amounts cannot be negative.`)
   if ((inputAmount === 0n) !== (outputMinimum === 0n))
     throw new Error(
       `${label} output minimum must be zero exactly when its input is zero.`,
     )
 }
 
-/** Resolves independent Base and Boost redemption floors. @internal */
-function campaignRedeemMinimums(args: redeemCampaign.Args) {
-  if (args.baseAssetAmountMin !== undefined)
+/** Resolves independent inner and outer redemption floors. @internal */
+function nestedRedeemMinimums(args: redeemNested.Args) {
+  if (args.innerAssetAmountMin !== undefined)
     return {
-      baseAssetAmountMin: args.baseAssetAmountMin,
-      boostAssetAmountMin: args.boostAssetAmountMin,
+      innerAssetAmountMin: args.innerAssetAmountMin,
+      outerAssetAmountMin: args.outerAssetAmountMin,
     }
   return {
-    baseAssetAmountMin:
-      args.baseAssetAmount === 0n
+    innerAssetAmountMin:
+      args.innerAssetAmount === 0n
         ? 0n
-        : EarnShares.minimumOutput(args.baseAssetAmount, args.slippageBps),
-    boostAssetAmountMin:
-      args.boostAssetAmount === 0n
+        : EarnShares.minimumOutput(args.innerAssetAmount, args.slippageBps),
+    outerAssetAmountMin:
+      args.outerAssetAmount === 0n
         ? 0n
-        : EarnShares.minimumOutput(args.boostAssetAmount, args.slippageBps),
+        : EarnShares.minimumOutput(args.outerAssetAmount, args.slippageBps),
   }
 }
 

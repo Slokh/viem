@@ -1,0 +1,266 @@
+---
+description: Integrate nested Earn vaults as one logical inner and outer position.
+---
+
+import { Card, Cards } from 'vocs'
+
+# Nested Earn Vaults
+
+## Overview
+
+Nested Earn adds an outer Earn vault over an existing inner Earn vault. Users can hold both inner
+and outer Earn shares, but Viem presents them as one product with one aggregate asset value. The
+outer vault inherits inner yield and can receive its own contributions.
+
+Outer-vault caps are cumulative principal limits. Exits do not reopen allocation. Admission and
+contribution funding can have independent onchain deadlines.
+
+## Recipes
+
+These recipes assume you have [set up a Tempo client](/tempo) and obtained the inner and outer vault
+addresses from the provider. Nested Earn actions verify that the outer vault's engine wraps the
+supplied inner vault and that both vaults use the same asset.
+
+### Inspect the Unified Position
+
+Use [`earn.getNestedPosition`](/tempo/actions/earn.getNestedPosition) instead of adding raw inner
+and outer share balances. Each token has its own exchange rate.
+
+:::code-group
+
+```ts twoslash [example.ts]
+import { client } from './viem.config'
+
+const vaults = {
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerVault: '0x0000000000000000000000000000000000000002',
+} as const
+
+const position = await client.earn.getNestedPosition(vaults)
+// @log: {
+// @log:   inner: { shareBalance: 40_000_000n, value: 41_000_000n, ... },
+// @log:   outer: { shareBalance: 60_000_000n, value: 64_000_000n, ... },
+// @log:   totalValue: 105_000_000n,
+// @log:   ...
+// @log: }
+```
+
+```ts twoslash [viem.config.ts] filename="viem.config.ts"
+// [!include ~/snippets/tempo/viem.config.ts:setup]
+```
+
+:::
+
+### Prepare a Split Deposit
+
+Read [`earn.getNestedAllocation`](/tempo/actions/earn.getNestedAllocation) close to submission.
+Quote each nonempty asset leg through the inner vault's normal provider-specific deposit quote. Then
+convert the inner share quote for the outer leg with
+[`earn.getOuterShareQuote`](/tempo/actions/earn.getOuterShareQuote).
+
+:::code-group
+
+```ts twoslash [example.ts]
+import { client } from './viem.config'
+
+const vaults = {
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerVault: '0x0000000000000000000000000000000000000002',
+} as const
+const recipient = client.account.address
+
+const allocation = await client.earn.getNestedAllocation({
+  assetAmount: 100_000_000n,
+  outerVault: vaults.outerVault,
+  recipient,
+})
+
+// Obtain these two provider-specific inner deposit quotes close to submission.
+const innerShareQuote = 39_900_000n
+const outerLegInnerShareQuote = 59_800_000n
+const outerShareQuote = await client.earn.getOuterShareQuote({
+  innerShareAmount: outerLegInnerShareQuote,
+  outerVault: vaults.outerVault,
+})
+```
+
+```ts twoslash [viem.config.ts] filename="viem.config.ts"
+// [!include ~/snippets/tempo/viem.config.ts:setup]
+```
+
+:::
+
+### Deposit Atomically
+
+Use [`earn.depositNestedSync`](/tempo/actions/earn.depositNested) to approve and execute both
+nonempty legs in one Tempo transaction. Apply a bound to each leg independently.
+
+:::code-group
+
+```ts twoslash [example.ts]
+import { EarnShares } from 'viem/tempo'
+import { client } from './viem.config'
+
+const vaults = {
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerVault: '0x0000000000000000000000000000000000000002',
+} as const
+const allocation = {
+  assetAmount: 100_000_000n,
+  innerAssetAmount: 40_000_000n,
+  outerAssetAmount: 60_000_000n,
+}
+const innerShareQuote = 39_900_000n
+const outerShareQuote = 59_800_000n
+
+const result = await client.earn.depositNestedSync({
+  allocation,
+  innerShareAmountMin: EarnShares.minimumOutput(innerShareQuote, 50),
+  outerShareAmountMin: EarnShares.minimumOutput(outerShareQuote, 50),
+  ...vaults,
+})
+```
+
+```ts twoslash [viem.config.ts] filename="viem.config.ts"
+// [!include ~/snippets/tempo/viem.config.ts:setup]
+```
+
+:::
+
+The allocation is signed exactly. If another deposit consumes outer capacity first, the complete
+batch reverts. Read a new allocation, refresh both quotes, and resubmit.
+
+### Redeem the Unified Position
+
+Read [`earn.getNestedRedeemQuote`](/tempo/actions/earn.getNestedRedeemQuote), then redeem both
+share tokens atomically with [`earn.redeemNestedSync`](/tempo/actions/earn.redeemNested).
+
+:::code-group
+
+```ts twoslash [example.ts]
+import { client } from './viem.config'
+
+const vaults = {
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerVault: '0x0000000000000000000000000000000000000002',
+} as const
+const position = {
+  inner: { shareBalance: 40_000_000n },
+  outer: { shareBalance: 60_000_000n },
+}
+
+const quote = await client.earn.getNestedRedeemQuote({
+  innerShareAmount: position.inner.shareBalance,
+  outerShareAmount: position.outer.shareBalance,
+  ...vaults,
+})
+
+const result = await client.earn.redeemNestedSync({
+  innerAssetAmount: quote.innerAssetAmount,
+  innerShareAmount: position.inner.shareBalance,
+  outerAssetAmount: quote.outerAssetAmount,
+  outerShareAmount: position.outer.shareBalance,
+  slippageBps: 50,
+  ...vaults,
+})
+```
+
+```ts twoslash [viem.config.ts] filename="viem.config.ts"
+// [!include ~/snippets/tempo/viem.config.ts:setup]
+```
+
+:::
+
+### Unwrap Outer Shares
+
+Use [`earn.getUnwrapQuote`](/tempo/actions/earn.getUnwrapQuote) and
+[`earn.unwrapNestedSync`](/tempo/actions/earn.unwrapNested) to convert outer shares directly
+into inner shares. No underlying asset or venue position moves.
+
+:::code-group
+
+```ts twoslash [example.ts]
+import { client } from './viem.config'
+
+const vaults = {
+  outerVault: '0x0000000000000000000000000000000000000002',
+} as const
+const position = { outer: { shareBalance: 60_000_000n } }
+
+const innerShareAmount = await client.earn.getUnwrapQuote({
+  outerShareAmount: position.outer.shareBalance,
+  outerVault: vaults.outerVault,
+})
+
+const unwrapping = await client.earn.unwrapNestedSync({
+  innerShareAmount,
+  outerShareAmount: position.outer.shareBalance,
+  outerVault: vaults.outerVault,
+  slippageBps: 50,
+})
+```
+
+```ts twoslash [viem.config.ts] filename="viem.config.ts"
+// [!include ~/snippets/tempo/viem.config.ts:setup]
+```
+
+:::
+
+Applications can offer this unwrapping after outer admission ends and include it during the
+holder's next public interaction. Unwrapping remains holder-authorized.
+
+### Exit When Immediate Liquidity Is Unavailable
+
+If direct outer redemption cannot use the inner vault's immediate exit:
+
+1. Unwrap the outer shares into inner shares.
+2. Use the inner vault's async redemption action.
+
+This keeps the nested engine simple while preserving access to the inner vault's queued
+exit path.
+
+## Best Practices
+
+### Treat Nested Earn as One Product
+
+Store both vault addresses, but display `totalValue` as the product balance. Do not add raw share
+balances.
+
+### Quote Every Nonempty Leg
+
+Inner and outer deposits and redemptions have independent output bounds. A zero input leg must have a
+zero bound.
+
+### Unwrap Opportunistically
+
+After the admission deadline, include unwrapping in the next suitable holder interaction. Inactive
+holders can remain in the backed outer token without affecting the inner venue position.
+
+### Keep Zone Constraints Explicit
+
+Inner and outer Earn shares are separate tokens and each must be enabled in a Zone. The current
+private callback returns one token, so the public split-deposit action does not apply to private
+Zone callbacks.
+
+## See More
+
+<Cards>
+  <Card
+    icon="lucide:wallet-cards"
+    title="Inspect a Nested Earn Position"
+    description="Read inner and outer shares as one asset-valued position."
+    to="/tempo/actions/earn.getNestedPosition"
+  />
+  <Card
+    icon="lucide:arrow-down-to-line"
+    title="Deposit into Nested Earn"
+    description="Execute the bounded inner and outer legs atomically."
+    to="/tempo/actions/earn.depositNested"
+  />
+  <Card
+    icon="lucide:arrow-right-left"
+    title="Unwrap Outer Shares"
+    description="Convert outer Earn shares directly into inner Earn shares."
+    to="/tempo/actions/earn.unwrapNested"
+  />
+</Cards>

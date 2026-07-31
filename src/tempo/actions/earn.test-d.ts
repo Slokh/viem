@@ -125,51 +125,51 @@ test('getPosition requires an account only without a client account', async () =
   expectTypeOf(position.value).toEqualTypeOf<bigint>()
 })
 
-test('campaign actions preserve unified position and write result types', async () => {
-  const campaign = { baseVault: address, boostVault: address } as const
-  const position = await earnActions.getCampaignPosition(clientWithAccount, {
-    ...campaign,
+test('nested actions preserve unified position and write result types', async () => {
+  const nested = { innerVault: address, outerVault: address } as const
+  const position = await earnActions.getNestedPosition(clientWithAccount, {
+    ...nested,
   })
   expectTypeOf(
     position,
-  ).toEqualTypeOf<earnActions.getCampaignPosition.ReturnValue>()
+  ).toEqualTypeOf<earnActions.getNestedPosition.ReturnValue>()
   expectTypeOf(position.totalValue).toEqualTypeOf<bigint>()
   expectTypeOf(
-    position.base,
+    position.inner,
   ).toEqualTypeOf<earnActions.getPosition.ReturnValue>()
 
-  const allocation = await earnActions.getCampaignAllocation(client, {
+  const allocation = await earnActions.getNestedAllocation(client, {
     assetAmount: 100n,
-    boostVault: address,
+    outerVault: address,
     recipient: address,
   })
-  expectTypeOf(allocation).toEqualTypeOf<earnActions.CampaignAllocation>()
+  expectTypeOf(allocation).toEqualTypeOf<earnActions.NestedAllocation>()
 
-  const hash = await earnActions.depositCampaign(clientWithAccount, {
+  const hash = await earnActions.depositNested(clientWithAccount, {
     allocation,
-    baseShareAmountMin: 1n,
-    boostShareAmountMin: 1n,
-    ...campaign,
+    innerShareAmountMin: 1n,
+    outerShareAmountMin: 1n,
+    ...nested,
   })
-  expectTypeOf(hash).toEqualTypeOf<earnActions.depositCampaign.ReturnValue>()
+  expectTypeOf(hash).toEqualTypeOf<earnActions.depositNested.ReturnValue>()
 
-  const redemption = await decoratedClient.earn.redeemCampaignSync({
-    baseAssetAmountMin: 1n,
-    baseShareAmount: 1n,
-    boostAssetAmountMin: 1n,
-    boostShareAmount: 1n,
-    ...campaign,
+  const redemption = await decoratedClient.earn.redeemNestedSync({
+    innerAssetAmountMin: 1n,
+    innerShareAmount: 1n,
+    outerAssetAmountMin: 1n,
+    outerShareAmount: 1n,
+    ...nested,
   })
   expectTypeOf(
     redemption,
-  ).toEqualTypeOf<earnActions.redeemCampaignSync.ReturnValue>()
+  ).toEqualTypeOf<earnActions.redeemNestedSync.ReturnValue>()
 
-  const migration = await decoratedClient.earn.migrateCampaignSync({
-    baseShareAmountMin: 1n,
-    boostShareAmount: 1n,
-    boostVault: address,
+  const unwrapping = await decoratedClient.earn.unwrapNestedSync({
+    innerShareAmountMin: 1n,
+    outerShareAmount: 1n,
+    outerVault: address,
   })
-  expectTypeOf(migration.baseShareAmount).toEqualTypeOf<bigint>()
+  expectTypeOf(unwrapping.innerShareAmount).toEqualTypeOf<bigint>()
 })
 
 test('getFeeState claimable shares stay optional', async () => {

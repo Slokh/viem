@@ -1,0 +1,37 @@
+import ReadParameters from '../../../snippets/tempo/read-parameters.mdx'
+
+# `earn.getOuterShareQuote`
+
+Converts a provider-supplied inner Earn share quote for the outer asset leg into an outer Earn share
+quote.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const outerShareAmount = await client.earn.getOuterShareQuote({
+  innerShareAmount: 59_800_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+})
+```
+
+## Return Value
+
+- **Type:** `bigint`
+
+Fee-aware outer Earn shares expected for the quoted inner shares.
+
+## Parameters
+
+### innerShareAmount
+
+- **Type:** `bigint`
+
+Inner shares quoted for depositing the outer asset leg into the inner vault.
+
+### outerVault
+
+- **Type:** `Address`
+
+<ReadParameters />

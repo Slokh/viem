@@ -1764,14 +1764,14 @@ type DecoratorBase<
     configureExitSafePolicy: (
       parameters: earnActions.configureExitSafePolicy.Parameters<account>,
     ) => Promise<earnActions.configureExitSafePolicy.ReturnValue>
-    /** Deposits one asset amount across a capped Boost campaign and Base vault. */
-    depositCampaign: (
-      parameters: earnActions.depositCampaign.Parameters<chain, account>,
-    ) => Promise<earnActions.depositCampaign.ReturnValue>
-    /** Deposits across a campaign and returns the confirmed per-tier results. */
-    depositCampaignSync: (
-      parameters: earnActions.depositCampaignSync.Parameters<chain, account>,
-    ) => Promise<earnActions.depositCampaignSync.ReturnValue>
+    /** Deposits one asset amount across nested inner and outer Earn vaults. */
+    depositNested: (
+      parameters: earnActions.depositNested.Parameters<chain, account>,
+    ) => Promise<earnActions.depositNested.ReturnValue>
+    /** Deposits across nested Earn vaults and returns the confirmed per-vault results. */
+    depositNestedSync: (
+      parameters: earnActions.depositNestedSync.Parameters<chain, account>,
+    ) => Promise<earnActions.depositNestedSync.ReturnValue>
     /**
      * Deposits assets into a vault and mints Earn shares to `recipient`. The
      * transaction includes the required asset approval.
@@ -1987,26 +1987,26 @@ type DecoratorBase<
     getPosition: (
       parameters: earnActions.getPosition.Parameters<account>,
     ) => Promise<earnActions.getPosition.ReturnValue>
-    /** Gets the currently available Base and Boost allocation for a deposit. */
-    getCampaignAllocation: (
-      parameters: earnActions.getCampaignAllocation.Parameters,
-    ) => Promise<earnActions.getCampaignAllocation.ReturnValue>
-    /** Converts a Base share quote into the corresponding Boost share quote. */
-    getCampaignBoostQuote: (
-      parameters: earnActions.getCampaignBoostQuote.Parameters,
-    ) => Promise<earnActions.getCampaignBoostQuote.ReturnValue>
-    /** Gets the Base shares returned by an in-kind Boost migration. */
-    getCampaignMigrationQuote: (
-      parameters: earnActions.getCampaignMigrationQuote.Parameters,
-    ) => Promise<earnActions.getCampaignMigrationQuote.ReturnValue>
-    /** Gets a unified Base and Boost campaign position. */
-    getCampaignPosition: (
-      parameters: earnActions.getCampaignPosition.Parameters<account>,
-    ) => Promise<earnActions.getCampaignPosition.ReturnValue>
-    /** Gets independent and aggregate campaign redemption quotes. */
-    getCampaignRedeemQuote: (
-      parameters: earnActions.getCampaignRedeemQuote.Parameters,
-    ) => Promise<earnActions.getCampaignRedeemQuote.ReturnValue>
+    /** Gets the currently available inner and outer allocation for a deposit. */
+    getNestedAllocation: (
+      parameters: earnActions.getNestedAllocation.Parameters,
+    ) => Promise<earnActions.getNestedAllocation.ReturnValue>
+    /** Converts an inner share quote into the corresponding outer share quote. */
+    getOuterShareQuote: (
+      parameters: earnActions.getOuterShareQuote.Parameters,
+    ) => Promise<earnActions.getOuterShareQuote.ReturnValue>
+    /** Gets the inner shares returned by unwrapping outer shares. */
+    getUnwrapQuote: (
+      parameters: earnActions.getUnwrapQuote.Parameters,
+    ) => Promise<earnActions.getUnwrapQuote.ReturnValue>
+    /** Gets a unified nested Earn position. */
+    getNestedPosition: (
+      parameters: earnActions.getNestedPosition.Parameters<account>,
+    ) => Promise<earnActions.getNestedPosition.ReturnValue>
+    /** Gets independent and aggregate nested redemption quotes. */
+    getNestedRedeemQuote: (
+      parameters: earnActions.getNestedRedeemQuote.Parameters,
+    ) => Promise<earnActions.getNestedRedeemQuote.ReturnValue>
     /**
      * Gets the vault's addresses, configuration, accounting state, and
      * supported actions. Throws `GetVaultEngineChangedError` if its engine
@@ -2146,22 +2146,22 @@ type DecoratorBase<
     redeemSync: (
       parameters: earnActions.redeemSync.Parameters<chain, account>,
     ) => Promise<earnActions.redeemSync.ReturnValue>
-    /** Converts Boost Earn shares directly into Base Earn shares. */
-    migrateCampaign: (
-      parameters: earnActions.migrateCampaign.Parameters<chain, account>,
-    ) => Promise<earnActions.migrateCampaign.ReturnValue>
-    /** Converts Boost shares and returns the confirmed migration result. */
-    migrateCampaignSync: (
-      parameters: earnActions.migrateCampaignSync.Parameters<chain, account>,
-    ) => Promise<earnActions.migrateCampaignSync.ReturnValue>
-    /** Redeems Base and Boost campaign shares in one atomic transaction. */
-    redeemCampaign: (
-      parameters: earnActions.redeemCampaign.Parameters<chain, account>,
-    ) => Promise<earnActions.redeemCampaign.ReturnValue>
-    /** Redeems campaign shares and returns confirmed per-tier results. */
-    redeemCampaignSync: (
-      parameters: earnActions.redeemCampaignSync.Parameters<chain, account>,
-    ) => Promise<earnActions.redeemCampaignSync.ReturnValue>
+    /** Unwraps outer Earn shares directly into inner Earn shares. */
+    unwrapNested: (
+      parameters: earnActions.unwrapNested.Parameters<chain, account>,
+    ) => Promise<earnActions.unwrapNested.ReturnValue>
+    /** Unwraps outer shares and returns the confirmed result. */
+    unwrapNestedSync: (
+      parameters: earnActions.unwrapNestedSync.Parameters<chain, account>,
+    ) => Promise<earnActions.unwrapNestedSync.ReturnValue>
+    /** Redeems inner and outer shares in one atomic transaction. */
+    redeemNested: (
+      parameters: earnActions.redeemNested.Parameters<chain, account>,
+    ) => Promise<earnActions.redeemNested.ReturnValue>
+    /** Redeems nested shares and returns confirmed per-vault results. */
+    redeemNestedSync: (
+      parameters: earnActions.redeemNestedSync.Parameters<chain, account>,
+    ) => Promise<earnActions.redeemNestedSync.ReturnValue>
     /**
      * Withdraws Earn shares from a Zone and redeems them on the parent chain.
      *
@@ -5934,28 +5934,28 @@ export function decorator() {
       earn: bindActions(client, earnActions, [
         'configureExitSafePolicy',
         'deposit',
-        'depositCampaign',
-        'depositCampaignSync',
+        'depositNested',
+        'depositNestedSync',
         'depositSync',
         'depositShares',
         'depositSharesSync',
         'privateDeposit',
         'privateDepositSync',
         'getFeeState',
-        'getCampaignAllocation',
-        'getCampaignBoostQuote',
-        'getCampaignMigrationQuote',
-        'getCampaignPosition',
-        'getCampaignRedeemQuote',
+        'getNestedAllocation',
+        'getOuterShareQuote',
+        'getUnwrapQuote',
+        'getNestedPosition',
+        'getNestedRedeemQuote',
         'getPosition',
         'getRedeemQuote',
         'getVault',
         'getWithdrawQuote',
-        'migrateCampaign',
-        'migrateCampaignSync',
+        'unwrapNested',
+        'unwrapNestedSync',
         'redeem',
-        'redeemCampaign',
-        'redeemCampaignSync',
+        'redeemNested',
+        'redeemNestedSync',
         'redeemSync',
         'privateRedeem',
         'privateRedeemSync',

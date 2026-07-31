@@ -1,20 +1,20 @@
 import ReadParameters from '../../../snippets/tempo/read-parameters.mdx'
 
-# `earn.getCampaignAllocation`
+# `earn.getNestedAllocation`
 
-Gets the live Base and Boost asset split for a capped campaign deposit.
+Gets the live inner and outer asset split for a nested Earn deposit.
 
 ## Usage
 
 ```ts twoslash
 import { client } from './viem.config'
 
-const allocation = await client.earn.getCampaignAllocation({
+const allocation = await client.earn.getNestedAllocation({
   assetAmount: 100_000_000n,
-  boostVault: '0x0000000000000000000000000000000000000002',
+  outerVault: '0x0000000000000000000000000000000000000002',
   recipient: client.account.address,
 })
-// @log: { assetAmount: 100_000_000n, baseAssetAmount: 40_000_000n, boostAssetAmount: 60_000_000n }
+// @log: { assetAmount: 100_000_000n, innerAssetAmount: 40_000_000n, outerAssetAmount: 60_000_000n }
 ```
 
 The result is not a reservation. A concurrent deposit can consume capacity before submission.
@@ -24,8 +24,8 @@ The result is not a reservation. A concurrent deposit can consume capacity befor
 ```ts
 type ReturnValue = {
   assetAmount: bigint
-  baseAssetAmount: bigint
-  boostAssetAmount: bigint
+  innerAssetAmount: bigint
+  outerAssetAmount: bigint
 }
 ```
 
@@ -35,7 +35,7 @@ type ReturnValue = {
 
 - **Type:** `bigint`
 
-### boostVault
+### outerVault
 
 - **Type:** `Address`
 

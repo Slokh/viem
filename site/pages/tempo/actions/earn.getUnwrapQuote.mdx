@@ -1,0 +1,34 @@
+import ReadParameters from '../../../snippets/tempo/read-parameters.mdx'
+
+# `earn.getUnwrapQuote`
+
+Gets the inner Earn shares returned by in-kind outer unwrapping.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const innerShareAmount = await client.earn.getUnwrapQuote({
+  outerShareAmount: 100_000_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+})
+```
+
+## Return Value
+
+- **Type:** `bigint`
+
+Fee-aware inner Earn share output.
+
+## Parameters
+
+### outerShareAmount
+
+- **Type:** `bigint`
+
+### outerVault
+
+- **Type:** `Address`
+
+<ReadParameters />

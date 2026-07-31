@@ -1,0 +1,48 @@
+import ReadParameters from '../../../snippets/tempo/read-parameters.mdx'
+
+# `earn.getNestedRedeemQuote`
+
+Gets independent inner and outer asset outputs and their aggregate value.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const quote = await client.earn.getNestedRedeemQuote({
+  innerShareAmount: 40_000_000n,
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerShareAmount: 60_000_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+})
+```
+
+## Return Value
+
+```ts
+type ReturnValue = {
+  innerAssetAmount: bigint
+  outerAssetAmount: bigint
+  totalAssetAmount: bigint
+}
+```
+
+## Parameters
+
+### innerShareAmount
+
+- **Type:** `bigint`
+
+### innerVault
+
+- **Type:** `Address`
+
+### outerShareAmount
+
+- **Type:** `bigint`
+
+### outerVault
+
+- **Type:** `Address`
+
+<ReadParameters />

@@ -1,0 +1,74 @@
+import WriteParameters from '../../../snippets/tempo/write-parameters.mdx'
+
+# `earn.depositNested`
+
+Deposits one asset amount across nested inner and outer Earn vaults atomically.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const result = await client.earn.depositNestedSync({
+  allocation: {
+    assetAmount: 100_000_000n,
+    innerAssetAmount: 40_000_000n,
+    outerAssetAmount: 60_000_000n,
+  },
+  innerShareAmountMin: 39_500_000n,
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerShareAmountMin: 59_000_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+})
+```
+
+The action approves and executes each nonempty leg in one Tempo transaction. A stale allocation
+reverts the complete batch.
+
+## Return Value
+
+```ts
+type ReturnValue = {
+  inner?: { assetAmount: bigint; shareAmount: bigint }
+  outer?: { assetAmount: bigint; shareAmount: bigint }
+  receipt: TransactionReceipt
+}
+```
+
+The asynchronous `earn.depositNested` variant returns the transaction hash.
+
+## Parameters
+
+### allocation
+
+- **Type:** `NestedAllocation`
+
+Exact split returned by
+[`earn.getNestedAllocation`](/tempo/actions/earn.getNestedAllocation).
+
+### innerShareAmountMin
+
+- **Type:** `bigint`
+
+Must be zero exactly when the inner leg is empty.
+
+### innerVault
+
+- **Type:** `Address`
+
+### outerShareAmountMin
+
+- **Type:** `bigint`
+
+Must be zero exactly when the outer leg is empty.
+
+### outerVault
+
+- **Type:** `Address`
+
+### recipient (optional)
+
+- **Type:** `Address`
+- **Default:** `account.address`
+
+<WriteParameters />

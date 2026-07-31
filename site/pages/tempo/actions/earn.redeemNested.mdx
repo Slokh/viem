@@ -1,0 +1,43 @@
+import WriteParameters from '../../../snippets/tempo/write-parameters.mdx'
+
+# `earn.redeemNested`
+
+Redeems inner and outer Earn shares atomically.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const result = await client.earn.redeemNestedSync({
+  innerAssetAmount: 40_000_000n,
+  innerShareAmount: 40_000_000n,
+  innerVault: '0x0000000000000000000000000000000000000001',
+  outerAssetAmount: 60_000_000n,
+  outerShareAmount: 60_000_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+  slippageBps: 50,
+})
+```
+
+## Return Value
+
+```ts
+type ReturnValue = {
+  inner?: { assetAmount: bigint; shareAmount: bigint }
+  outer?: { assetAmount: bigint; shareAmount: bigint }
+  receipt: TransactionReceipt
+}
+```
+
+The asynchronous `earn.redeemNested` variant returns the transaction hash.
+
+## Parameters
+
+Pass `innerShareAmount`, `outerShareAmount`, `innerVault`, and `outerVault`. Bound each nonempty leg
+with either `innerAssetAmountMin` and `outerAssetAmountMin`, or with quoted `innerAssetAmount`,
+`outerAssetAmount`, and `slippageBps`.
+
+An empty share leg must have a zero output bound.
+
+<WriteParameters />

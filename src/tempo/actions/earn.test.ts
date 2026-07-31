@@ -31,7 +31,7 @@ import {
   http,
   setupToken,
 } from '~test/tempo/config.js'
-import { deployEarnCampaign, deployEarnStack } from '~test/tempo/earn.js'
+import { deployEarnStack, deployNestedEarnVaults } from '~test/tempo/earn.js'
 import * as EarnContracts from '~test/tempo/earnContracts.js'
 
 const account = accounts[0]
@@ -456,26 +456,26 @@ describe('depositSync', { timeout: 30_000 }, () => {
   })
 })
 
-describe('campaign call builders', () => {
+describe('nested call builders', () => {
   const assetToken = `0x${'11'.repeat(20)}` as const
-  const baseShareToken = `0x${'22'.repeat(20)}` as const
-  const baseVault = `0x${'33'.repeat(20)}` as const
-  const boostShareToken = `0x${'44'.repeat(20)}` as const
-  const boostVault = `0x${'55'.repeat(20)}` as const
+  const innerShareToken = `0x${'22'.repeat(20)}` as const
+  const innerVault = `0x${'33'.repeat(20)}` as const
+  const outerShareToken = `0x${'44'.repeat(20)}` as const
+  const outerVault = `0x${'55'.repeat(20)}` as const
   const recipient = `0x${'66'.repeat(20)}` as const
 
-  test('builds one atomic Boost-first deposit batch', () => {
-    const calls = Actions.earn.depositCampaign.calls({
+  test('builds one atomic outer-first deposit batch', () => {
+    const calls = Actions.earn.depositNested.calls({
       allocation: {
         assetAmount: 100n,
-        baseAssetAmount: 40n,
-        boostAssetAmount: 60n,
+        innerAssetAmount: 40n,
+        outerAssetAmount: 60n,
       },
       assetToken,
-      baseShareAmountMin: 39n,
-      baseVault,
-      boostShareAmountMin: 59n,
-      boostVault,
+      innerShareAmountMin: 39n,
+      innerVault,
+      outerShareAmountMin: 59n,
+      outerVault,
       recipient,
     })
 
@@ -486,55 +486,55 @@ describe('campaign call builders', () => {
       'approve',
       'deposit',
     ])
-    expect(calls[0].args).toEqual([boostVault, 60n])
+    expect(calls[0].args).toEqual([outerVault, 60n])
     expect(calls[1].args).toEqual([60n, recipient, 59n])
-    expect(calls[2].args).toEqual([baseVault, 40n])
+    expect(calls[2].args).toEqual([innerVault, 40n])
     expect(calls[3].args).toEqual([40n, recipient, 39n])
   })
 
-  test('omits empty campaign legs and rejects mismatched bounds', () => {
+  test('omits empty nested legs and rejects mismatched bounds', () => {
     expect(
-      Actions.earn.depositCampaign.calls({
+      Actions.earn.depositNested.calls({
         allocation: {
           assetAmount: 100n,
-          baseAssetAmount: 100n,
-          boostAssetAmount: 0n,
+          innerAssetAmount: 100n,
+          outerAssetAmount: 0n,
         },
         assetToken,
-        baseShareAmountMin: 99n,
-        baseVault,
-        boostShareAmountMin: 0n,
-        boostVault,
+        innerShareAmountMin: 99n,
+        innerVault,
+        outerShareAmountMin: 0n,
+        outerVault,
         recipient,
       }),
     ).toHaveLength(2)
     expect(() =>
-      Actions.earn.depositCampaign.calls({
+      Actions.earn.depositNested.calls({
         allocation: {
           assetAmount: 100n,
-          baseAssetAmount: 100n,
-          boostAssetAmount: 0n,
+          innerAssetAmount: 100n,
+          outerAssetAmount: 0n,
         },
         assetToken,
-        baseShareAmountMin: 99n,
-        baseVault,
-        boostShareAmountMin: 1n,
-        boostVault,
+        innerShareAmountMin: 99n,
+        innerVault,
+        outerShareAmountMin: 1n,
+        outerVault,
         recipient,
       }),
-    ).toThrow('Boost output minimum')
+    ).toThrow('Outer output minimum')
   })
 
-  test('builds bounded combined redemption and in-kind migration calls', () => {
-    const redemption = Actions.earn.redeemCampaign.calls({
-      baseAssetAmount: 40n,
-      baseShareAmount: 42n,
-      baseShareToken,
-      baseVault,
-      boostAssetAmount: 60n,
-      boostShareAmount: 63n,
-      boostShareToken,
-      boostVault,
+  test('builds bounded combined redemption and in-kind unwrapping calls', () => {
+    const redemption = Actions.earn.redeemNested.calls({
+      innerAssetAmount: 40n,
+      innerShareAmount: 42n,
+      innerShareToken,
+      innerVault,
+      outerAssetAmount: 60n,
+      outerShareAmount: 63n,
+      outerShareToken,
+      outerVault,
       recipient,
       slippageBps: 100,
     })
@@ -542,126 +542,123 @@ describe('campaign call builders', () => {
     expect(redemption[1].args).toEqual([63n, recipient, 59n])
     expect(redemption[3].args).toEqual([42n, recipient, 39n])
 
-    const migration = Actions.earn.migrateCampaign.calls({
-      baseShareAmountMin: 61n,
-      boostShareAmount: 63n,
-      boostShareToken,
-      boostVault,
+    const unwrapping = Actions.earn.unwrapNested.calls({
+      innerShareAmountMin: 61n,
+      outerShareAmount: 63n,
+      outerShareToken,
+      outerVault,
       recipient,
     })
-    expect(migration).toHaveLength(2)
-    expect(migration[0].args).toEqual([boostVault, 63n])
-    expect(migration[1].args).toEqual([63n, recipient, 61n])
+    expect(unwrapping).toHaveLength(2)
+    expect(unwrapping[0].args).toEqual([outerVault, 63n])
+    expect(unwrapping[1].args).toEqual([63n, recipient, 61n])
   })
 })
 
-describe('campaign actions', { timeout: 30_000 }, () => {
-  test('deposits, values, redeems, and migrates one nested campaign', async () => {
-    const base = await setupStack()
-    const campaign = await deployEarnCampaign(client, {
-      base,
+describe('nested actions', { timeout: 30_000 }, () => {
+  test('deposits, values, redeems, and unwraps one nested composition', async () => {
+    const inner = await setupStack()
+    const nested = await deployNestedEarnVaults(client, {
+      inner,
       globalAssetCap: parseUnits('60', 6),
     })
     const vaults = {
-      baseVault: campaign.baseVault,
-      boostVault: campaign.boostVault,
+      innerVault: nested.innerVault,
+      outerVault: nested.outerVault,
     }
-    const allocation = await Actions.earn.getCampaignAllocation(client, {
+    const allocation = await Actions.earn.getNestedAllocation(client, {
       assetAmount: parseUnits('100', 6),
-      boostVault: campaign.boostVault,
+      outerVault: nested.outerVault,
       recipient: account.address,
     })
 
     expect(allocation).toEqual({
       assetAmount: parseUnits('100', 6),
-      baseAssetAmount: parseUnits('40', 6),
-      boostAssetAmount: parseUnits('60', 6),
+      innerAssetAmount: parseUnits('40', 6),
+      outerAssetAmount: parseUnits('60', 6),
     })
 
-    const deposited = await Actions.earn.depositCampaignSync(client, {
+    const deposited = await Actions.earn.depositNestedSync(client, {
       allocation,
-      baseShareAmountMin: 1n,
-      boostShareAmountMin: 1n,
+      innerShareAmountMin: 1n,
+      outerShareAmountMin: 1n,
       ...vaults,
     })
-    expect(deposited.base).toEqual({
+    expect(deposited.inner).toEqual({
       assetAmount: parseUnits('40', 6),
       shareAmount: parseUnits('40', 6),
     })
-    expect(deposited.boost).toEqual({
+    expect(deposited.outer).toEqual({
       assetAmount: parseUnits('60', 6),
       shareAmount: parseUnits('60', 6),
     })
 
-    const depositedPosition = await Actions.earn.getCampaignPosition(client, {
+    const depositedPosition = await Actions.earn.getNestedPosition(client, {
       ...vaults,
     })
-    expect(depositedPosition.base.shareBalance).toBe(parseUnits('40', 6))
-    expect(depositedPosition.boost.shareBalance).toBe(parseUnits('60', 6))
+    expect(depositedPosition.inner.shareBalance).toBe(parseUnits('40', 6))
+    expect(depositedPosition.outer.shareBalance).toBe(parseUnits('60', 6))
     expect(depositedPosition.totalValue).toBe(parseUnits('100', 6))
 
-    const baseShareAmount = parseUnits('10', 6)
-    const boostShareAmount = parseUnits('20', 6)
-    const quote = await Actions.earn.getCampaignRedeemQuote(client, {
-      baseShareAmount,
-      boostShareAmount,
+    const innerShareAmount = parseUnits('10', 6)
+    const outerShareAmount = parseUnits('20', 6)
+    const quote = await Actions.earn.getNestedRedeemQuote(client, {
+      innerShareAmount,
+      outerShareAmount,
       ...vaults,
     })
-    const redeemed = await Actions.earn.redeemCampaignSync(client, {
-      baseAssetAmount: quote.baseAssetAmount,
-      baseShareAmount,
-      boostAssetAmount: quote.boostAssetAmount,
-      boostShareAmount,
+    const redeemed = await Actions.earn.redeemNestedSync(client, {
+      innerAssetAmount: quote.innerAssetAmount,
+      innerShareAmount,
+      outerAssetAmount: quote.outerAssetAmount,
+      outerShareAmount,
       slippageBps: 0,
       ...vaults,
     })
-    expect(redeemed.base).toEqual({
+    expect(redeemed.inner).toEqual({
       assetAmount: parseUnits('10', 6),
       shareAmount: parseUnits('10', 6),
     })
-    expect(redeemed.boost).toEqual({
+    expect(redeemed.outer).toEqual({
       assetAmount: parseUnits('20', 6),
       shareAmount: parseUnits('20', 6),
     })
 
-    const remainingBoostShares = parseUnits('40', 6)
-    const migrationQuote = await Actions.earn.getCampaignMigrationQuote(
-      client,
-      {
-        boostShareAmount: remainingBoostShares,
-        boostVault: campaign.boostVault,
-      },
-    )
-    const migrated = await Actions.earn.migrateCampaignSync(client, {
-      baseShareAmountMin: migrationQuote,
-      boostShareAmount: remainingBoostShares,
-      boostVault: campaign.boostVault,
+    const remainingOuterShares = parseUnits('40', 6)
+    const unwrapQuote = await Actions.earn.getUnwrapQuote(client, {
+      outerShareAmount: remainingOuterShares,
+      outerVault: nested.outerVault,
     })
-    expect(migrated.baseShareAmount).toBe(parseUnits('40', 6))
-    expect(migrated.boostShareAmount).toBe(remainingBoostShares)
+    const unwrapped = await Actions.earn.unwrapNestedSync(client, {
+      innerShareAmountMin: unwrapQuote,
+      outerShareAmount: remainingOuterShares,
+      outerVault: nested.outerVault,
+    })
+    expect(unwrapped.innerShareAmount).toBe(parseUnits('40', 6))
+    expect(unwrapped.outerShareAmount).toBe(remainingOuterShares)
 
-    const finalPosition = await Actions.earn.getCampaignPosition(client, {
+    const finalPosition = await Actions.earn.getNestedPosition(client, {
       ...vaults,
     })
-    expect(finalPosition.base.shareBalance).toBe(parseUnits('70', 6))
-    expect(finalPosition.boost.shareBalance).toBe(0n)
+    expect(finalPosition.inner.shareBalance).toBe(parseUnits('70', 6))
+    expect(finalPosition.outer.shareBalance).toBe(0n)
     expect(finalPosition.totalValue).toBe(parseUnits('70', 6))
   })
 
-  test('rejects one vault used as both campaign tiers', () => {
+  test('rejects one vault used as both nested tiers', () => {
     const vault = `0x${'77'.repeat(20)}` as const
     expect(() =>
-      Actions.earn.depositCampaign.calls({
+      Actions.earn.depositNested.calls({
         allocation: {
           assetAmount: 1n,
-          baseAssetAmount: 1n,
-          boostAssetAmount: 0n,
+          innerAssetAmount: 1n,
+          outerAssetAmount: 0n,
         },
         assetToken: `0x${'88'.repeat(20)}`,
-        baseShareAmountMin: 1n,
-        baseVault: vault,
-        boostShareAmountMin: 0n,
-        boostVault: vault,
+        innerShareAmountMin: 1n,
+        innerVault: vault,
+        outerShareAmountMin: 0n,
+        outerVault: vault,
         recipient: account.address,
       }),
     ).toThrow('must be different')
@@ -965,7 +962,7 @@ describe('getVault', { timeout: 30_000 }, () => {
     `)
   })
 
-  test('behavior: user-only migration mode', async () => {
+  test('behavior: user-only unwrapping mode', async () => {
     const stack = await deployEarnStack(client, {
       controls: { migrationMode: 'userOnly' },
     })

@@ -2362,8 +2362,8 @@ export default defineConfig({
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'Capped Campaigns',
-                  link: '/tempo/guides/earn/campaigns',
+                  text: 'Nested Earn Vaults',
+                  link: '/tempo/guides/earn/nested',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
@@ -2645,8 +2645,8 @@ export default defineConfig({
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'depositCampaign',
-                  link: '/tempo/actions/earn.depositCampaign',
+                  text: 'depositNested',
+                  link: '/tempo/actions/earn.depositNested',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
@@ -2660,28 +2660,28 @@ export default defineConfig({
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'getCampaignAllocation',
-                  link: '/tempo/actions/earn.getCampaignAllocation',
+                  text: 'getNestedAllocation',
+                  link: '/tempo/actions/earn.getNestedAllocation',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'getCampaignBoostQuote',
-                  link: '/tempo/actions/earn.getCampaignBoostQuote',
+                  text: 'getOuterShareQuote',
+                  link: '/tempo/actions/earn.getOuterShareQuote',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'getCampaignMigrationQuote',
-                  link: '/tempo/actions/earn.getCampaignMigrationQuote',
+                  text: 'getUnwrapQuote',
+                  link: '/tempo/actions/earn.getUnwrapQuote',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'getCampaignPosition',
-                  link: '/tempo/actions/earn.getCampaignPosition',
+                  text: 'getNestedPosition',
+                  link: '/tempo/actions/earn.getNestedPosition',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'getCampaignRedeemQuote',
-                  link: '/tempo/actions/earn.getCampaignRedeemQuote',
+                  text: 'getNestedRedeemQuote',
+                  link: '/tempo/actions/earn.getNestedRedeemQuote',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
@@ -2715,8 +2715,8 @@ export default defineConfig({
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'migrateCampaign',
-                  link: '/tempo/actions/earn.migrateCampaign',
+                  text: 'unwrapNested',
+                  link: '/tempo/actions/earn.unwrapNested',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
@@ -2725,8 +2725,8 @@ export default defineConfig({
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },
-                  text: 'redeemCampaign',
-                  link: '/tempo/actions/earn.redeemCampaign',
+                  text: 'redeemNested',
+                  link: '/tempo/actions/earn.redeemNested',
                 },
                 {
                   badge: { text: 'EXP', variant: 'warning' },

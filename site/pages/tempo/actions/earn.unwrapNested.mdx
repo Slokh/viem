@@ -1,0 +1,67 @@
+import WriteParameters from '../../../snippets/tempo/write-parameters.mdx'
+
+# `earn.unwrapNested`
+
+Converts outer Earn shares directly into their backing inner Earn shares.
+
+## Usage
+
+```ts twoslash
+import { client } from './viem.config'
+
+const result = await client.earn.unwrapNestedSync({
+  innerShareAmount: 99_500_000n,
+  outerShareAmount: 100_000_000n,
+  outerVault: '0x0000000000000000000000000000000000000002',
+  slippageBps: 50,
+})
+```
+
+No underlying asset or venue position moves. The action approves the outer shares, burns them, and
+delivers the corresponding inner shares.
+
+## Return Value
+
+```ts
+type ReturnValue = {
+  innerShareAmount: bigint
+  outerShareAmount: bigint
+  receipt: TransactionReceipt
+  recipient: Address
+}
+```
+
+The asynchronous `earn.unwrapNested` variant returns the transaction hash.
+
+## Parameters
+
+### innerShareAmount (optional)
+
+- **Type:** `bigint`
+
+Quoted inner share output. Provide with `slippageBps`, or use `innerShareAmountMin`.
+
+### innerShareAmountMin (optional)
+
+- **Type:** `bigint`
+
+Exact minimum inner share output.
+
+### outerShareAmount
+
+- **Type:** `bigint`
+
+### outerVault
+
+- **Type:** `Address`
+
+### recipient (optional)
+
+- **Type:** `Address`
+- **Default:** `account.address`
+
+### slippageBps (optional)
+
+- **Type:** `number`
+
+<WriteParameters />
